@@ -56,12 +56,17 @@ def process_dicomdir(source_path: Path, target_path: Path):
         temp_path = Path(tempdir)
 
         # Convert the whole directory
-        with redirect_stderr(StringIO()):
+        log = StringIO()
+        with redirect_stderr(log):
             dicom2nifti.convert_directory(
                 dicom_directory=str(source_path),
                 output_folder=str(temp_path),
                 compression=True
             )
+        log = log.getvalue()
+        if len(log) > 1:
+            with open(target_path / "preprocessing.log", "w") as logfile:
+                logfile.write(log)
 
         # List what generated nifti is a 512x512xD image for the appropriate phase
         items = []
@@ -140,6 +145,7 @@ def get_args():
 if __name__ == "__main__":
     opts = get_args()
 
+    console.print("\n[bold orange3]Converting dicom to nifti:[/bold orange3]")
     for case_path in discover_dicomdirs(opts["sources"]):
         target_path = opts["outputs"] / case_path
         target_path_is_complete = all(

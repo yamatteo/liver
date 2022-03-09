@@ -14,6 +14,14 @@ def is_dicomdir(path: Path) -> bool:
     return "DICOMDIR" in [item.name for item in path.iterdir()]
 
 
+def is_original_dir(path: Path) -> bool:
+    """A directory is a dicom if it contains a 'DICOMDIR' file."""
+    return all(
+        f"original_phase_{phase}.nii.gz" in [item.name for item in path.iterdir()]
+        for phase in ["b", "a", "v", "t"]
+    )
+
+
 def discover_dicomdirs(path: Path, relative_to_path: Optional[Path] = None) -> List[Path]:
     """Collects paths of all dicom sub-folders."""
     if relative_to_path is None:
@@ -26,6 +34,23 @@ def discover_dicomdirs(path: Path, relative_to_path: Optional[Path] = None) -> L
                 subdir
                 for subpath in path.iterdir()
                 for subdir in discover_dicomdirs(subpath, relative_to_path)
+            ]
+    else:
+        return []
+
+
+def discover_original_dirs(path: Path, relative_to_path: Optional[Path] = None) -> List[Path]:
+    """Collects paths of all dicom sub-folders."""
+    if relative_to_path is None:
+        relative_to_path = path
+    if path.is_dir():
+        if is_original_dir(path):
+            return [path.relative_to(relative_to_path)]
+        else:
+            return [
+                subdir
+                for subpath in path.iterdir()
+                for subdir in discover_original_dirs(subpath, relative_to_path)
             ]
     else:
         return []

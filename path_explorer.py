@@ -2,10 +2,7 @@ import argparse
 from pathlib import Path
 from typing import List, Optional
 
-from options import defaults
 from rich.console import Console
-from rich.progress import track
-from rich.pretty import pprint
 
 from options import defaults
 
@@ -13,10 +10,12 @@ console = Console()
 
 
 def is_dicomdir(path: Path) -> bool:
+    """A directory is a dicom if it contains a 'DICOMDIR' file."""
     return "DICOMDIR" in [item.name for item in path.iterdir()]
 
 
 def discover_dicomdirs(path: Path, relative_to_path: Optional[Path] = None) -> List[Path]:
+    """Collects paths of all dicom sub-folders."""
     if relative_to_path is None:
         relative_to_path = path
     if path.is_dir():

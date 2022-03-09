@@ -1,15 +1,15 @@
+dicom2nifti==2.3.0
+nibabel==3.2.2
 rich==11.1.0
 
 adabelief-pytorch
 black
-dicom2nifti
 ipykernel
 ipython
 ipywidgets
 jupyter
 jupyterlab
 matplotlib
-nibabel
 numpy
 pandas
 Pillow

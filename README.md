@@ -5,3 +5,4 @@
 
 ## Development todos
  - revise the license
+ - think about other resolutions

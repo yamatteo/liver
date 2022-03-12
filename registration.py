@@ -26,7 +26,7 @@ def register_case(source_path: Path, target_path: Path):
             # Run the registering library
             with open(target_path / f"registration_{phase}.log", "w") as logfile:
                 niftireg_log = os.popen(
-                    f"reg_f3d "
+                    f"{opts['nifti_bin'] / 'reg_f3d'} "
                     f"-ref {source_path / 'original_phase_v.nii.gz'} "
                     f"-flo {source_path / f'original_phase_{phase}.nii.gz'} "
                     f"-res {target_path / f'registered_phase_{phase}.nii.gz'} "

@@ -7,6 +7,7 @@ RUN pip install -r requirements.txt
 RUN apt update
 RUN apt install -y build-essential cmake git libgdcm-tools
 COPY . .
+COPY saved_models /models
 RUN export CFLAGS=" -g -O2 -lm -ldl -Wall -Wpointer-arith -finline-functions -ffast-math -funroll-all-loops"
 RUN cd nifty_reg_build && make && make install
 

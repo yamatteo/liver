@@ -7,7 +7,7 @@ import nibabel
 from rich.console import Console
 
 from options import defaults
-from path_explorer import discover_original_dirs
+from path_explorer import discover, get_criterion
 
 console = Console()
 
@@ -45,8 +45,8 @@ def get_args():
 if __name__ == "__main__":
     opts = get_args()
 
-    console.print("\n[bold orange3]Registering images:[/bold orange3]")
-    for case_path in discover_original_dirs(opts["outputs"]):
+    console.print("[bold orange3]Registering images:[/bold orange3]")
+    for case_path in discover(opts["outputs"], get_criterion(original=True)):
         source_path = target_path = opts["outputs"] / case_path
         target_path_is_complete = all(
             (target_path / f"registered_phase_{phase}.nii.gz").exists()

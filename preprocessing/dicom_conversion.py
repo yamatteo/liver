@@ -11,7 +11,7 @@ import nibabel
 from rich.console import Console
 
 from options import defaults
-from path_explorer import discover_dicomdirs
+from path_explorer import discover, get_criterion
 
 console = Console()
 
@@ -145,8 +145,8 @@ def get_args():
 if __name__ == "__main__":
     opts = get_args()
 
-    console.print("\n[bold orange3]Converting dicom to nifti:[/bold orange3]")
-    for case_path in discover_dicomdirs(opts["sources"]):
+    console.print("[bold orange3]Converting dicom to nifti:[/bold orange3]")
+    for case_path in discover(opts["sources"], get_criterion(dicom=True)):
         target_path = opts["outputs"] / case_path
         target_path_is_complete = all(
             (target_path / f"original_phase_{phase}.nii.gz").exists()

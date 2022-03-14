@@ -1,4 +1,6 @@
 python -m path_explorer
-python -m dicom_conversion
-python -m registration
+
+# TODO maybe join preprocessing operations
+python -m preprocessing.dicom_conversion
+python -m preprocessing.registration
 python -m segmentation.apply --model v1

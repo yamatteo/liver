@@ -1,14 +1,14 @@
 from pathlib import Path
 
 defaults = dict(
-    sources=Path("/sources"),
-    # sources=Path("../inputs"),
-    outputs=Path("/outputs"),
-    # outputs=Path("../outputs"),
-    nifti_bin=Path("/usr/local/bin/"),
-    # nifti_bin=Path("~/niftireg/nifti_install/bin/"),
-    saved_models=Path("/models"),
-    # saved_models=Path("./saved_models"),
+    # sources=Path("/sources"),
+    sources=Path("../inputs"),
+    # outputs=Path("/outputs"),
+    outputs=Path("../outputs"),
+    # nifti_bin=Path("/usr/local/bin/"),
+    nifti_bin=Path("~/niftireg/nifti_install/bin/"),
+    # saved_models=Path("/models"),
+    saved_models=Path("./saved_models"),
 
     epochs=400,
     batch_size=4,
@@ -18,4 +18,5 @@ defaults = dict(
     adabelief_b1=0.9,
     adabelief_b2=0.999,
     num_workers=8,
+    wafer_size=5,
 )

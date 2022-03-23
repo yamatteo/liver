@@ -7,20 +7,21 @@ import nibabel
 import numpy as np
 import torch
 from torch import Tensor
+from torch.nn.functional import max_pool3d, avg_pool3d, one_hot
 from torch.utils.data import Dataset
 
-from path_explorer import discover_cases_dirs, is_segmented_case, discover, is_case
+from path_explorer import discover, get_criterion
 
 
 class GenericDataset(Dataset):
     def __init__(self,
-                 data_path: Path | str,
+                 base_path: Path | str,
                  segmented: bool,
                  wafer: int | None,
                  background_reduction: float | None):
         self.cases = [
-            data_path / case
-            for case in discover_cases_dirs(data_path, segmented)
+            base_path / case
+            for case in discover(base_path, get_criterion(registered=True, segmented=segmented))
         ]
         self.cases = [
             {
@@ -78,7 +79,7 @@ class QuantileDataset(Dataset):
     def __init__(self, base_path: Path | str, segmented: bool):
         self.cases = [
             case_dir
-            for case_dir in discover(base_path, is_segmented_case if segmented else is_case)
+            for case_dir in discover(base_path, get_criterion(registered=True, segmented=segmented))
         ]
         self.cases = [
             {
@@ -87,8 +88,8 @@ class QuantileDataset(Dataset):
                 "path": str((base_path / case_dir).resolve()),
 
                 "orig_affine": nibabel.load(
-                        base_path / case_dir / f"registered_phase_v.nii.gz"
-                    ).affine,
+                    base_path / case_dir / f"registered_phase_v.nii.gz"
+                ).affine,
 
                 # "orig_scan": torch.stack([
                 #     torch.tensor(np.array(nibabel.load(
@@ -120,8 +121,8 @@ class QuantileDataset(Dataset):
                 "case_dir": case["case_dir"],
                 "path": case["path"],
                 "orig_affine": case["orig_affine"],
-                #"orig_scan": case["orig_scan"],
-                #"orig_segm": case["orig_segm"],
+                # "orig_scan": case["orig_scan"],
+                # "orig_segm": case["orig_segm"],
 
                 "scan": self.quantiles(case["scan"]).permute(1, 2, 0).reshape(-1, 40),
 
@@ -143,3 +144,62 @@ class QuantileDataset(Dataset):
             torch.linspace(0.1, 1, 10),
             dim=-1
         )
+
+
+class Dataset882(Dataset):
+    def __init__(self, base_path: Path | str, segmented: bool, ):
+        self.cases = [
+            case_dir
+            for case_dir in discover(base_path, is_segmented_windowed_case if segmented else is_windowed_case)
+        ]
+        self.cases = [
+            {
+                "name": case_dir.name,
+                "case_dir": str(case_dir),
+                "path": str((base_path / case_dir).resolve()),
+
+                "zwindow": torch.load(base_path / case_dir / f"zwindow.pt"),
+
+                "scan": torch.stack([
+                    torch.tensor(np.array(nibabel.load(
+                        base_path / case_dir / f"registered_phase_{phase}.nii.gz"
+                    ).dataobj, dtype=np.int16))
+                    for phase in ["b", "a", "v", "t"]
+                ]).float(),
+
+                "segmentation": torch.tensor(np.array(nibabel.load(
+                    base_path / case_dir / f"segmentation.nii.gz"
+                ).dataobj, dtype=np.int16)).long() if segmented else None
+            }
+            for case_dir in self.cases
+        ]
+        self.cases = [
+            {
+                "name": case["name"],
+                "case_dir": case["case_dir"],
+                "path": case["path"],
+                "orig_affine": case["zwindow"]["orig_affine"],
+                "z_offset": case["zwindow"]["z_offset"],
+                "total_z": case["scan"].size(3),
+
+                "scan": avg_pool3d(
+                    case["scan"][..., case["zwindow"]["z_offset"]:case["zwindow"]["z_offset"] + 32],
+                    kernel_size=(8, 8, 2)
+                ),
+
+                "segmentation": max_pool3d(
+                    one_hot(
+                        case["segmentation"][..., case["zwindow"]["z_offset"]:case["zwindow"]["z_offset"] + 32],
+                        3
+                    ).permute(3, 0, 1, 2).float(),
+                    kernel_size=(8, 8, 2)
+                ) if segmented else None
+            }
+            for case in self.cases
+        ]
+
+    def __len__(self):
+        return len(self.cases)
+
+    def __getitem__(self, i):
+        return self.cases[i]

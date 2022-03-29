@@ -4,6 +4,7 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 
 import nibabel
+import numpy as np
 from rich.console import Console
 
 from options import defaults
@@ -55,5 +56,15 @@ if __name__ == "__main__":
         if opts["overwrite"] or not target_path_is_complete:
             target_path.mkdir(parents=True, exist_ok=True)
             register_case(source_path, target_path)
+            # for phase in ["b", "a", "v", "t"]:
+            #     image = nibabel.load(target_path / f"registered_phase_{phase}.nii.gz")
+            #     nibabel.save(
+            #         nibabel.Nifti1Image(
+            #             image.dataobj,
+            #             affine=np.array([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]])
+            #         ),
+            #         target_path / f"registered_phase_{phase}.nii.gz",
+            #     )
+
         else:
             console.print(f"[bold black]{case_path.name}.[/bold black] is already complete, skipping.")

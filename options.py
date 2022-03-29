@@ -10,7 +10,7 @@ defaults = dict(
     # saved_models=Path("/models"),
     saved_models=Path("./saved_models"),
 
-    epochs=400,
+    epochs=1000,
     batch_size=4,
     validation_percent=0.1,
     learning_rate=1e-4,

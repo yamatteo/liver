@@ -40,6 +40,17 @@ def scan_segm_tuples(base_path: Path | str) -> Iterator[Tuple[Tensor, Tensor]]:
         yield scan, segm
 
 
+def get_scans(base_path: Path | str) -> Iterator[Tensor]:
+    for case in cases(base_path, segmented=False):
+        scan = torch.stack([
+            torch.tensor(np.array(nibabel.load(
+                case / f"registered_phase_{phase}.nii.gz"
+            ).dataobj, dtype=np.int16)).float()
+            for phase in ["b", "a", "v", "t"]
+        ]).unsqueeze(0)
+        yield scan
+
+
 def tensor_slices(x: Tensor, thick: int, step: int, dim: int = -1) -> Iterator[Tensor]:
     height = x.size(dim)
     n = ceil((height - thick) / step) + 1

@@ -1,73 +1,69 @@
 from __future__ import annotations
 
 import itertools
-from pathlib import Path
-from typing import Iterator, Callable
+from typing import Iterator
 from warnings import warn
 
-import nibabel
-import numpy as np
-import torch
 from torch import Tensor
-from torch.nn.functional import max_pool3d, avg_pool3d, one_hot, interpolate
 from torch.utils.data import Dataset
-
-from path_explorer import discover, get_criterion
 
 
 class BufferDataset(Dataset):
-    def __init__(self, generator: Callable[[], Iterator[Tensor]], buffer_size: int):
-        self.current_generator = None
-        self.get_tensors = generator
-        self.buffer_size = buffer_size
-        self.buffer = {}
-        self.propre_buffer = self.fill()
+    def __init__(self, tensor_generator: Iterator[Tensor], buffer_size: int):
+        cyclic_tensor_generator = itertools.cycle(enumerate(tensor_generator))
+        buffer = {}
+
+        while len(buffer) < buffer_size:
+            i, tensor = next(cyclic_tensor_generator)
+            if i in buffer:
+                warn("Buffer is larger than population.")
+                self.proper = False
+                break
+            else:
+                buffer[i] = tensor
+        else:
+            self.proper = True
+
+        self.keys = {i: key for (i, key) in enumerate(buffer.keys())}
+        self.buffer = buffer
         self.buffer_size = len(self.buffer)
+        self.generator = cyclic_tensor_generator
 
     def __len__(self):
         return self.buffer_size
 
-    def __getitem__(self, i):
-        return self.buffer[i].data
+    def __getitem__(self, i) -> Tensor:
+        k = self.keys[i]
+        return self.buffer[k]
 
-    def fill(self):
-        gen = iter(enumerate(self.get_tensors()))
-        proper_buffer = True
-        while len(self.buffer) < self.buffer_size:
-            try:
-                i, x = next(gen)
-                self.buffer[i] = x
-            except StopIteration:
-                warn("Buffer is larger than population.")
-                proper_buffer = False
-                break
-        self.current_generator = gen
-        return proper_buffer
+    def getitem(self, i) -> tuple[int, Tensor]:
+        k = self.keys[i]
+        return k, self.buffer[k]
+
+    def __iter__(self):
+        return iter(self.buffer.values())
 
     def refill(self):
-        missing = self.buffer_size - len(self.buffer)
         count = 0
-        while count < 100 * missing and len(self.buffer) < self.buffer_size:
+        while count <= self.buffer_size and len(self.buffer) < self.buffer_size:
             count += 1
-            try:
-                i, x = next(self.current_generator)
-                self.buffer[i] = x
-            except StopIteration:
-                self.current_generator = iter(enumerate(self.get_tensors()))
-                break
-        while count < 100 * missing and len(self.buffer) < self.buffer_size:
-            count += 1
-            i, x = next(self.current_generator)
+            i, x = next(self.generator)
             self.buffer[i] = x
+        self.keys = {i: key for (i, key) in enumerate(self.buffer.keys())}
         if len(self.buffer) < self.buffer_size:
-            raise StopIteration(f"Can't refill buffer ({count} of 100*{missing})")
+            raise StopIteration(f"Can't refill buffer with {self.buffer_size} attempts")
 
-    def drop(self, indices: list[int]):
-        if self.propre_buffer:
-            for i in indices:
-                del self.buffer[i]
+    def drop(self, keys: list[int]):
+        print("Dropping:", keys)
+        if self.proper:
+            for k in keys:
+                del self.buffer[k]
             self.refill()
         else:
-            for i in indices:
-                x = self.buffer.pop(i)
-                self.buffer[i] = x
+            # If the buffer is not proper there is no need to fetch tensors again, just reordering
+            for k in keys:
+                self.buffer[k] = self.buffer.pop(k)
+
+    def drop_by_position(self, positions: list[int]):
+        keys = [self.keys[i] for i in positions]
+        self.drop(keys)

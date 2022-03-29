@@ -8,7 +8,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from path_explorer import discover_cases_dirs
+from path_explorer import discover
 
 
 class GenericDataset(Dataset):

@@ -16,10 +16,12 @@ from torch.utils.data import DataLoader, random_split
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-from dataset.dataset import QuantileDataset
+from dataset import transformations
+from dataset.dataset import QuantileDataset, GenericDataset
 from options import defaults
-from .models import ZPredict
-#from .utilities import dice_distance, jaccard_distance, mj_distance
+from .models import ZPredict, get_model
+
+# from .utilities import dice_distance, jaccard_distance, mj_distance
 
 console = Console()
 classes = ["background", "liver", "tumor"]
@@ -71,36 +73,32 @@ def evaluate(net: nn.Module, dataloader: torch.utils.data.DataLoader, device: to
 
 
 @torch.no_grad()
-def samples(net, valid_ds, device):
+def samples(net, dataset, device):
     k = 8
-    indices = random.sample(range(len(valid_ds)), k)
+    indices = [4*i + i//4 for i in range(0, 9)]
+    scan = random.choice(dataset)['scan']
+    predictions = net(transformations.quantiles_pxyz2qz(scan).to(device=device, dtype=torch.float32))
+    best_z = max(
+        [z for z in range(len(predictions) - 32)],
+        key=lambda z: torch.sum(predictions[z:z + 32]) - 1e-6 * z
+    )
     wafers = torch.stack([
-        valid_ds[i]["wafer"]
+        scan[2, :, :, best_z+i]
         for i in indices
     ]).to(device=device, dtype=torch.float32)
-    segmentation = torch.stack([
-        valid_ds[i]["segmentation"]
-        for i in indices
-    ]).to(device=device, dtype=torch.long)
     # predict the mask
-    prediction = net(wafers).argmax(dim=3)
-    wafers = torch.clamp(wafers[:, 2, :, :, 2], 0, 256) / 256
+    wafers = torch.clamp(wafers, 0, 256) / 256
     # scan = scan[:, 0, :, :, 1]
-    prediction = prediction / 2
-    segmentation = segmentation / 2
-    return torch.stack([
-        image[i]
-        for image in [wafers, prediction, segmentation]
-        for i in range(k)
-    ]).unsqueeze(1)
+    return wafers.unsqueeze(1)
 
 
 def train_net(net, device, **opts):
     shutil.rmtree(Path(opts["outputs"]) / "last_run", ignore_errors=True)
 
-    dataset = QuantileDataset(
+    dataset = GenericDataset(
         base_path=opts["outputs"],
         segmented=True,
+        wafer=None, background_reduction=None,
     )
 
     # n_valid = int(len(dataset) * opts["validation_percent"])
@@ -114,7 +112,6 @@ def train_net(net, device, **opts):
     #                       num_workers=opts["num_workers"])
     # valid_dl = DataLoader(valid_ds, shuffle=False, drop_last=True, batch_size=opts["batch_size"],
     #                       num_workers=opts["num_workers"])
-
 
     optimizer = AdaBelief(
         net.parameters(),
@@ -139,8 +136,9 @@ def train_net(net, device, **opts):
         epoch_loss = 0
         with tqdm(total=len(dataset), desc=f'Epoch {epoch + 1}/{opts["epochs"]}', unit='img') as pbar:
             for case in dataset:
-                scan = case['scan'].to(device=device, dtype=torch.float32)
-                segmentation = case['segmentation'].to(device=device, dtype=torch.float32)
+                scan = transformations.quantiles_pxyz2qz(case['scan']).to(device=device, dtype=torch.float32)
+                segmentation = transformations.relevance_xyz2z(case['segmentation']).to(device=device,
+                                                                                        dtype=torch.float32)
 
                 optimizer.zero_grad(set_to_none=True)
 
@@ -164,21 +162,19 @@ def train_net(net, device, **opts):
                 )
 
                 # Evaluation round
-                # division_step = (n_train // (10 * opts["batch_size"]))
-                # if division_step > 0:
-                #     if global_step % division_step == 0:
-                #         writer.add_scalars(
-                #             "evaluation",
-                #             evaluate(net, valid_dl, device),
-                #             global_step=global_step,
-                #         )
-                #         writer.add_images(
-                #             "samples",
-                #             samples(net, valid_ds, device),
-                #             global_step=global_step,
-                #             dataformats="NCHW"
-                #         )
-                #         torch.cuda.empty_cache()
+                if global_step % 10 == 0:
+                    # writer.add_scalars(
+                    #     "evaluation",
+                    #     evaluate(net, valid_dl, device),
+                    #     global_step=global_step,
+                    # )
+                    writer.add_images(
+                        "samples",
+                        samples(net, dataset, device),
+                        global_step=global_step,
+                        dataformats="NCHW"
+                    )
+                    torch.cuda.empty_cache()
 
 
 def get_args():
@@ -187,7 +183,7 @@ def get_args():
     # parser.add_argument('--batch-size', type=int)
     # parser.add_argument('--learning-rate', '-l', metavar='LR', type=float, default=1e-5,
     #                     help='Learning rate', dest='lr')
-    parser.add_argument('--model', type=str, default=None, help='Use model from a .pth file')
+    parser.add_argument('--model', type=str, required=True, help='Use model from a .pth file')
     # parser.add_argument('--scale', '-s', type=float, default=0.5, help='Downscaling factor of the images')
     # parser.add_argument('--validation', '-v', dest='val', type=float, default=10.0,
     #                     help='Percent of the data that is used as validation (0-100)')
@@ -203,24 +199,19 @@ if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     console.print(f'Using device {device}')
 
-    net = ZPredict().to(device=device, dtype=torch.float32)
-
-    # summary(net, (4, 512, 512, 5), opts["batch_size"], device=str(device))
-
-    if opts["model"]:
-        try:
-            net.load_state_dict(torch.load(opts["saved_models"] / (opts['model'] + '.pth')))
-            console.print(f"Model loaded from {opts['saved_models'] / (opts['model'] + '.pth')}")
-        except FileNotFoundError as err:
-            console.print(f"No model at {opts['saved_models'] / (opts['model'] + '.pth')}")
-            console.print(f"Using a fresh one.")
+    net = get_model(opts["model"]).to(device=device, dtype=torch.float32)
+    try:
+        net.load_state_dict(torch.load(opts["saved_models"] / (opts['model'] + '.pth')))
+        console.print(f"Model loaded from {opts['saved_models'] / (opts['model'] + '.pth')}")
+    except FileNotFoundError as err:
+        console.print(f"No model at {opts['saved_models'] / (opts['model'] + '.pth')}")
+        console.print(f"Using a fresh one.")
 
     try:
         train_net(net=net, device=device, **opts)
     except KeyboardInterrupt:
         pass
     finally:
-        if opts["model"]:
-            console.print(f"Saving model at {opts['saved_models'] / (opts['model'] + '.pth')}")
-            torch.save(net.cpu().state_dict(), opts['saved_models'] / (opts['model'] + '.pth'))
+        console.print(f"Saving model at {opts['saved_models'] / (opts['model'] + '.pth')}")
+        torch.save(net.cpu().state_dict(), opts['saved_models'] / (opts['model'] + '.pth'))
     sys.exit(0)

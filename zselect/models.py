@@ -1,7 +1,4 @@
-import torch
 from torch import Tensor, nn
-
-
 
 
 class ZPredict(nn.Module):
@@ -23,3 +20,8 @@ class ZPredict(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:
         return self.model(x).squeeze(-1)
+
+
+def get_model(name: str) -> nn.Module:
+    if name == "zoffset_v0":
+        return ZPredict()

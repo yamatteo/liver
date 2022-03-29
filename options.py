@@ -1,15 +1,8 @@
 from pathlib import Path
+from envs import envs
 
 defaults = dict(
-    # sources=Path("/sources"),
-    sources=Path("../inputs"),
-    # outputs=Path("/outputs"),
-    outputs=Path("../outputs"),
-    # nifti_bin=Path("/usr/local/bin/"),
-    nifti_bin=Path("~/niftireg/nifti_install/bin/"),
-    # saved_models=Path("/models"),
-    saved_models=Path("./saved_models"),
-
+    **envs,
     epochs=1000,
     batch_size=4,
     validation_percent=0.1,

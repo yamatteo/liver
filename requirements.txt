@@ -3,23 +3,23 @@ nibabel==3.2.2
 rich==11.1.0
 
 adabelief-pytorch
-black
-ipykernel
-ipython
-ipywidgets
-jupyter
-jupyterlab
-matplotlib
+# black
+# ipykernel
+# ipython
+# ipywidgets
+# jupyter
+# jupyterlab
+# matplotlib
 numpy
 pandas
 Pillow
 requests
-scikit-image
-scikit-learn
+# scikit-image
+# scikit-learn
 scipy
-seaborn
-seaborn-image
-tensorboard
+# seaborn
+# seaborn-image
+# tensorboard
 textual
-tornado
+# tornado
 tqdm

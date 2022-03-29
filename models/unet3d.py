@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as func
 from torch import Tensor
 from torch.utils.checkpoint import checkpoint
-from batchrenorm import BatchRenorm3d
+# from batchrenorm import BatchRenorm3d
 
 class Block3d(nn.Module):
     def __init__(self, in_channels: int, out_channels: int, complexity: int, final, checkpointing: bool = False):
@@ -17,7 +17,7 @@ class Block3d(nn.Module):
                   nn.Conv3d(out_channels, out_channels, 3, padding=1)
               ] * complexity)
         )
-        if final == nn.BatchNorm3d or final == BatchRenorm3d:
+        if final == nn.BatchNorm3d:  # or final == BatchRenorm3d:
             self.final = final(num_features=out_channels, momentum=0.5, affine=False)
         elif final == nn.Dropout3d:
             self.final = final(p=0.5)

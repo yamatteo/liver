@@ -1,5 +1,4 @@
 import torch
-from batchrenorm import BatchRenorm3d
 from torch import nn
 
 from models import unet3dB
@@ -9,12 +8,7 @@ from models.unet3d import UNet3d
 
 def get_model(model: str, **opts) -> nn.Module:
     if model == "segm882.2":
-        net = UNet3d(
-            channels=[4, 16, 32, 64],
-            final_classes=3,
-            complexity=2,
-            norm=BatchRenorm3d,
-        )
+        pass
     elif model == "segm882.3":
         net = UNet3d(
             channels=[4, 16, 32, 64],

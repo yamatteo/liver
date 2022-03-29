@@ -1,3 +1,4 @@
+export PYTHONPATH="${PYTHONPATH}:/workspace"
 python -m path_explorer
 
 # TODO maybe join preprocessing operations

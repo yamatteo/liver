@@ -13,7 +13,7 @@ from path_explorer import discover, get_criterion
 console = Console()
 
 
-def register_case(source_path: Path, target_path: Path):
+def register_case(source_path: Path, target_path: Path, niftybin: Path):
     """Register 4-phase scans with respect to phase v."""
     case_name = source_path.name
     console.print(f"[bold black]{case_name}.[/bold black] Working (it is a long process) ...")
@@ -27,7 +27,7 @@ def register_case(source_path: Path, target_path: Path):
             # Run the registering library
             with open(target_path / f"registration_{phase}.log", "w") as logfile:
                 niftireg_log = os.popen(
-                    f"{opts['nifti_bin'] / 'reg_f3d'} "
+                    f"{niftybin / 'reg_f3d'} "
                     f"-ref {source_path / 'original_phase_v.nii.gz'} "
                     f"-flo {source_path / f'original_phase_{phase}.nii.gz'} "
                     f"-res {target_path / f'registered_phase_{phase}.nii.gz'} "
@@ -39,6 +39,7 @@ def register_case(source_path: Path, target_path: Path):
 def get_args():
         parser = argparse.ArgumentParser(description="Convert dicom to nifti.")
         parser.add_argument("--defaults", nargs="?", default="options.py", type=Path, help="path to defaults module")
+        parser.add_argument("--niftybin", type=Path, default="/usr/local/bin")
         parser.add_argument("--outputs", type=Path, default=argparse.SUPPRESS)
         parser.add_argument("--overwrite", action="store_true")
         parser.add_argument("--sources", type=Path, default=argparse.SUPPRESS)
@@ -59,7 +60,7 @@ if __name__ == "__main__":
         )
         if opts["overwrite"] or not target_path_is_complete:
             target_path.mkdir(parents=True, exist_ok=True)
-            register_case(source_path, target_path)
+            register_case(source_path, target_path, niftybin=opts["niftybin"])
             # for phase in ["b", "a", "v", "t"]:
             #     image = nibabel.load(target_path / f"registered_phase_{phase}.nii.gz")
             #     nibabel.save(

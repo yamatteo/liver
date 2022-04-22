@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import nibabel
@@ -50,6 +51,8 @@ def predict_case(case: Path, net882, net, device):
 if __name__ == "__main__":
     opts = defaults
     opts["overwrite"] = False
+    opts["sources"] = os.getenv("REGISTERED_FOLDER", opts["sources"])
+    opts["outputs"] = os.getenv("PREDICTION_FOLDER", opts["outputs"])
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     console.print(f'Using device {device}')

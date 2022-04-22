@@ -64,8 +64,9 @@ if __name__ == "__main__":
     net882.eval()
 
     console.print("[bold orange3]Segmenting:[/bold orange3]")
-    for case_path in discover(opts["outputs"], get_criterion(registered=True)):
-        source_path = target_path = opts["outputs"] / case_path
+    for case_path in discover(opts["sources"], get_criterion(registered=True)):
+        source_path = opts["sources"] / case_path
+        target_path = opts["outputs"] / case_path
         target_path_is_complete = (target_path / f"prediction.nii.gz").exists()
         if opts["overwrite"] or not target_path_is_complete:
             target_path.mkdir(parents=True, exist_ok=True)

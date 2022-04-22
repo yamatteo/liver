@@ -32,6 +32,7 @@ def register_case(source_path: Path, target_path: Path, niftybin: Path):
                     f"-flo {source_path / f'original_phase_{phase}.nii.gz'} "
                     f"-res {target_path / f'registered_phase_{phase}.nii.gz'} "
                     f"-cpp {cpp_file.name} "
+                    f"-maxit 80 "
                 ).read()
                 logfile.write(niftireg_log)
 

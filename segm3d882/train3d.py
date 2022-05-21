@@ -11,17 +11,15 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from adabelief_pytorch import AdaBelief
+from dataset.twostage import BufferThickslice882
 from rich.console import Console
 from torch.nn.functional import one_hot
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-from dataset.dataset import Dataset882
-from dataset.twostage import BufferThickslice882
 from options import defaults
-from segm3d882.models3d import UNet3d, get_model
-from segmentation.dataset import GenericDataset
+from segm3d882.models3d import get_model
 from segm3d882.utilities import dice_distance, jaccard_distance
 
 console = Console()
@@ -79,7 +77,7 @@ def samples(net, valid_ds, device):
     k = 8
     scan = case[0:4].to(device=device, dtype=torch.float32).unsqueeze(0)
     segmentations = case[4:7].to(device=device, dtype=torch.float32).unsqueeze(0)
-    indices = [(i * (scan.size(-1)-1)) // (k-1) for i in range(k)]
+    indices = [(i * (scan.size(-1) - 1)) // (k - 1) for i in range(k)]
     # predict the mask
     predictions = net(scan)
 
@@ -90,14 +88,16 @@ def samples(net, valid_ds, device):
     prediction_t = predictions[0, 2, :, :, indices].permute(2, 0, 1)  # Only the tumor
     segmentation_t = segmentations[0, 2, :, :, indices].permute(2, 0, 1)  # Only the tumor
     return torch.stack([
-        image[i]
-        for i in range(k)
-        for image in [torch.clamp(wafers + prediction, 0, 1), wafers, torch.clamp(wafers + segmentation, 0, 1)]
-    ] + [
-        image[i]
-        for i in range(k)
-        for image in [torch.clamp(wafers + prediction_t, 0, 1), wafers, torch.clamp(wafers + segmentation_t, 0, 1)]
-    ]).reshape(16, 3, 64, 64)
+                           image[i]
+                           for i in range(k)
+                           for image in
+                           [torch.clamp(wafers + prediction, 0, 1), wafers, torch.clamp(wafers + segmentation, 0, 1)]
+                       ] + [
+                           image[i]
+                           for i in range(k)
+                           for image in [torch.clamp(wafers + prediction_t, 0, 1), wafers,
+                                         torch.clamp(wafers + segmentation_t, 0, 1)]
+                       ]).reshape(16, 3, 64, 64)
 
 
 def train_net(net, device, **opts):

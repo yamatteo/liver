@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import heapq
 import random
 import shutil
 import sys
@@ -15,13 +14,13 @@ from adabelief_pytorch import AdaBelief
 from rich.console import Console
 from torch import Tensor
 from torch.nn.functional import one_hot
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 from dataset.buffer import BufferDataset
 from dataset.generators import slices882, scan_segm_tuples
-from functions.distances import halfway_jaccard_distance, jaccard_distance
+from functions.distances import jaccard_distance
 from models import get_model
 from options import defaults
 
@@ -77,16 +76,15 @@ def evaluate(net: nn.Module, dataloader: torch.utils.data.DataLoader, device: to
 @torch.no_grad()
 def samples(net, valid_ds, device):
     k = 1
-    cases = torch.cat([ case for (i, case) in random.sample(valid_ds.buffer.items(), k)])
+    cases = torch.cat([case for (i, case) in random.sample(valid_ds.buffer.items(), k)])
     scan = torch.narrow(cases, 1, 0, 4).to(device=device, dtype=torch.float32)
     segm = torch.narrow(cases, 1, 4, 3).to(device=device, dtype=torch.float32)
     # predict the mask
     pred = net(scan)
-    zs = [ int(i*cases.size(4) / 24) for i in range(24) ]
-
+    zs = [int(i * cases.size(4) / 24) for i in range(24)]
 
     scan = torch.clamp(torch.narrow(scan, 1, 2, 1), 0, 256) / 256  # Only phase v
-    errors = torch.sum(torch.abs(segm-pred), dim=1, keepdim=True)
+    errors = torch.sum(torch.abs(segm - pred), dim=1, keepdim=True)
     liver = torch.narrow(segm, 1, 1, 1)
     tumor = torch.narrow(segm, 1, 2, 1)
     red = torch.clamp(torch.sum(torch.cat([scan, errors], dim=1), dim=1, keepdim=True), 0, 1)
@@ -113,11 +111,6 @@ def train_net(net, device, case, **opts) -> float:
     return jaccard.item()
 
 
-
-
-
-
-
 def get_args():
     parser = argparse.ArgumentParser(description='Train the model', argument_default=argparse.SUPPRESS)
     parser.add_argument('--epochs', type=int)
@@ -132,6 +125,7 @@ def get_args():
 
     return dict(defaults, **vars(parser.parse_args()))
 
+
 def batches(dataset: BufferDataset, n: int):
     """Yield successive n-sized chunks from lst."""
     items = list(dataset.buffer.items())
@@ -139,6 +133,7 @@ def batches(dataset: BufferDataset, n: int):
         indices = [j for j, x in items[i:i + n]]
         xx = torch.cat([x for j, x in items[i:i + n]])
         yield indices, xx
+
 
 if __name__ == '__main__':
     opts = get_args()
@@ -154,6 +149,7 @@ if __name__ == '__main__':
     def get_slices() -> Iterator[Tensor]:
         return slices882(opts["outputs"], thick=32, step=4)
 
+
     def get_scansegm() -> Iterator[Tensor]:
         def _iter_() -> Iterator[Tensor]:
             for (scan, segm) in scan_segm_tuples(opts["outputs"]):
@@ -161,7 +157,9 @@ if __name__ == '__main__':
                     torch.cat([scan, segm], dim=1),
                     kernel_size=(8, 8, 2)
                 )
+
         return _iter_()
+
 
     dataset = BufferDataset(
         tensor_generator_factory=get_scansegm,
@@ -200,7 +198,7 @@ if __name__ == '__main__':
                 writer.add_scalars(
                     "training",
                     {
-                        "jaccard": epoch_loss/len(dataset),
+                        "jaccard": epoch_loss / len(dataset),
                     },
                     global_step=global_step,
                 )

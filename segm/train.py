@@ -2,11 +2,9 @@ from __future__ import annotations
 
 import argparse
 import heapq
-import os
 import random
 import shutil
 import sys
-import time
 from pathlib import Path
 from typing import Iterator
 
@@ -17,7 +15,7 @@ from adabelief_pytorch import AdaBelief
 from rich.console import Console
 from torch import Tensor
 from torch.nn.functional import one_hot
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
@@ -25,11 +23,8 @@ import models
 from dataset.buffer import BufferDataset
 from dataset.generators import scan_segm_tuples
 from functions.distances import jaccard_distance
-from models import unet3dB
-import segm3d882.models3d
-import segm441.models
-from options import defaults
 from models.funet import FunneledUNet
+from options import defaults
 
 console = Console()
 classes = ["background", "liver", "tumor"]
@@ -173,7 +168,7 @@ def train_step(case, net, optimizer, device, writer, global_step):
     )
     liver_weight = torch.sum(segm[:, 1])
     tumor_weight = torch.sum(segm[:, 2])
-    liver_presence = liver_weight / (liver_weight+1)
+    liver_presence = liver_weight / (liver_weight + 1)
     tumor_presence = tumor_weight / (tumor_weight + 1)
     # loss = (tumor_presence * jaccard3 + liver_presence * jaccard2 + pixel) / (tumor_presence + liver_presence + 1)
     loss = (tumor_presence + liver_presence + 1) * pixel + jaccard2
@@ -285,7 +280,6 @@ def train_net(net, device, **opts):
                         global_step=global_step,
                         dataformats="NCHW"
                     )
-
 
         writer.add_scalars(
             "training2d",

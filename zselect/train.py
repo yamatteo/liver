@@ -10,16 +10,16 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from adabelief_pytorch import AdaBelief
+from dataset.dataset import GenericDataset
 from rich.console import Console
 from torch.nn.functional import one_hot
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 from dataset import transformations
-from dataset.dataset import QuantileDataset, GenericDataset
 from options import defaults
-from .models import ZPredict, get_model
+from .models import get_model
 
 # from .utilities import dice_distance, jaccard_distance, mj_distance
 
@@ -75,7 +75,7 @@ def evaluate(net: nn.Module, dataloader: torch.utils.data.DataLoader, device: to
 @torch.no_grad()
 def samples(net, dataset, device):
     k = 8
-    indices = [4*i + i//4 for i in range(0, 9)]
+    indices = [4 * i + i // 4 for i in range(0, 9)]
     scan = random.choice(dataset)['scan']
     predictions = net(transformations.quantiles_pxyz2qz(scan).to(device=device, dtype=torch.float32))
     best_z = max(
@@ -83,7 +83,7 @@ def samples(net, dataset, device):
         key=lambda z: torch.sum(predictions[z:z + 32]) - 1e-6 * z
     )
     wafers = torch.stack([
-        scan[2, :, :, best_z+i]
+        scan[2, :, :, best_z + i]
         for i in indices
     ]).to(device=device, dtype=torch.float32)
     # predict the mask

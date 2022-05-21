@@ -11,19 +11,17 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from adabelief_pytorch import AdaBelief
+from dataset.twostage import BufferCube441
 from rich.console import Console
 from torch.nn.functional import one_hot
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-from dataset.dataset import Dataset882
-from dataset.twostage import BufferThickslice882, BufferCube441
-from options import defaults
-from segm441.models import UNet3d, get_model
 import segm3d882.models3d
-from segmentation.dataset import GenericDataset
+from options import defaults
 from segm3d882.utilities import dice_distance, jaccard_distance
+from segm441.models import get_model
 
 console = Console()
 classes = ["background", "liver", "tumor"]
@@ -149,7 +147,8 @@ def train_net(net, prenet, device, **opts):
         net.train()
         epoch_loss = 0
         losses = []
-        with tqdm(total=len(dataset)*opts["batch_size"], desc=f'Epoch {epoch + 1}/{opts["epochs"]}', unit='img') as pbar:
+        with tqdm(total=len(dataset) * opts["batch_size"], desc=f'Epoch {epoch + 1}/{opts["epochs"]}',
+                  unit='img') as pbar:
             for i, case in enumerate(dataset):
                 scan = case[:, 0:7].to(device=device, dtype=torch.float32)
                 segmentations = case[:, 7:10].to(device=device, dtype=torch.float32)

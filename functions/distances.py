@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from torch import Tensor, sum, mean, abs, maximum, max_pool2d, sqrt
+from torch import Tensor, sum, mean, abs, maximum
 
 
 def dice_distance(input: Tensor, target: Tensor, spatial_dims: list[int]) -> Tensor:
@@ -27,7 +27,6 @@ def jaccard_distance(input: Tensor, target: Tensor) -> Tensor:
         sum(abs(input - target), dim=(2, 3, 4))
         / (sum(maximum(input, target), dim=(2, 3, 4)) + 1),
     )
-
 
 # def halfway_jaccard_distance(input: Tensor, target: Tensor) -> Tensor:
 #     """Dissimilarity of input and target classifications.

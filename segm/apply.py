@@ -17,7 +17,6 @@ console = Console()
 classes = ["background", "liver", "tumor"]
 
 
-
 @torch.no_grad()
 def predict_case(case: Path, net882, net, device):
     print(f"Predicting {case}...")

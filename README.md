@@ -1,9 +1,11 @@
 # Liver segmentation and features extraction
 
 ## MacOs instructions
- - install docker
+
+- install docker
 
 ## Development todos
- - revise the license
- - think about other resolutions
- - batch REnormalization
+
+- revise the license
+- think about other resolutions
+- batch REnormalization

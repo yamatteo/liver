@@ -36,19 +36,20 @@ def register_case(source_path: Path, target_path: Path, niftybin: Path):
 
 
 def get_args():
-        parser = argparse.ArgumentParser(description="Convert dicom to nifti.")
-        parser.add_argument("--defaults", nargs="?", default="options.py", type=Path, help="path to defaults module")
-        parser.add_argument("--niftybin", type=Path, default="/usr/local/bin")
-        parser.add_argument("--outputs", type=Path, default=argparse.SUPPRESS)
-        parser.add_argument("--overwrite", action="store_true")
-        parser.add_argument("--sources", type=Path, default=argparse.SUPPRESS)
+    parser = argparse.ArgumentParser(description="Convert dicom to nifti.")
+    parser.add_argument("--defaults", nargs="?", default="options.py", type=Path, help="path to defaults module")
+    parser.add_argument("--niftybin", type=Path, default="/usr/local/bin")
+    parser.add_argument("--outputs", type=Path, default=argparse.SUPPRESS)
+    parser.add_argument("--overwrite", action="store_true")
+    parser.add_argument("--sources", type=Path, default=argparse.SUPPRESS)
 
-        args = parser.parse_args()
-        return vars(args)
+    args = parser.parse_args()
+    return vars(args)
+
 
 if __name__ == "__main__":
     opts = get_args()
-    
+
     console.print("[bold orange3]Registering images:[/bold orange3]")
     for case_path in discover(opts["outputs"], get_criterion(original=True)):
         print(case_path)

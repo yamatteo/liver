@@ -20,6 +20,7 @@ def get_criterion(
         windowed: bool = False
 ) -> Callable[[Path], bool]:
     """Make a callable to identify folders."""
+
     def criterion(case_path: Path) -> bool:
         if case_path.is_dir():
             files = [file_path.name for file_path in case_path.iterdir()]
@@ -61,6 +62,44 @@ def discover(path: Path | str, select_dir: Callable) -> list[Path]:
 def get_args():
     parser = argparse.ArgumentParser()
     return dict(defaults, **vars(parser.parse_args()))
+
+
+def criterion(
+        dicom: bool = False,
+        original: bool = False,
+        registered: bool = False,
+        segmented: bool = False,
+        predicted: bool = False
+) -> Callable[[Path], bool]:
+    """Make a callable to identify folders."""
+
+    def _criterion(path: Path) -> bool:
+        if path.is_dir():
+            files = [file_path.name for file_path in path.iterdir()]
+            is_case_path = True
+
+            # Every condition is checked only if specified
+            if dicom:
+                is_case_path = is_case_path and "DICOMDIR" in files
+            if original:
+                is_case_path = is_case_path and all(
+                    f"original_phase_{phase}.nii.gz" in files
+                    for phase in ["b", "a", "v", "t"]
+                )
+            if registered:
+                is_case_path = is_case_path and all(
+                    f"registered_phase_{phase}.nii.gz" in files
+                    for phase in ["b", "a", "v", "t"]
+                )
+            if segmented:
+                is_case_path = is_case_path and "segmentation.nii.gz" in files
+            if predicted:
+                is_case_path = is_case_path and "prediction.nii.gz" in files
+            return is_case_path
+        else:
+            return False
+
+    return _criterion
 
 
 if __name__ == "__main__":

@@ -1,33 +1,19 @@
 from __future__ import annotations
 
 import argparse
-import random
-import shutil
-import sys
-from pathlib import Path
 
-import nibabel
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
-from adabelief_pytorch import AdaBelief
+from dataset.dataset import Dataset882
 from rich.console import Console
-from torch import Tensor
-from torch.nn.functional import one_hot
-from torch.utils.data import DataLoader, random_split
-from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-from dataset.dataset import Dataset882
 from options import defaults
 from segm3d882.models3d import UNet3d
-from segmentation.dataset import GenericDataset
-from segm3d882.utilities import dice_distance, jaccard_distance
 
 console = Console()
 classes = ["background", "liver", "tumor"]
-
 
 
 def get_args():
@@ -62,7 +48,8 @@ if __name__ == '__main__':
             predictions = net(scan)
 
             complete_predictions = torch.zeros((3, 512, 512, case["total_z"]))
-            complete_predictions[:, :, :, case["z_offset"]:case["z_offset"]+32] = torch.nn.functional.upsample_nearest(predictions, (512, 512, 32))
+            complete_predictions[:, :, :,
+            case["z_offset"]:case["z_offset"] + 32] = torch.nn.functional.upsample_nearest(predictions, (512, 512, 32))
 
             np.savez_compressed(
                 opts["outputs"] / case["case_dir"] / "prediction882.npz",

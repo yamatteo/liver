@@ -60,7 +60,6 @@ class UNet3d(nn.Module):
         return self.model(x)
 
 
-
 def get_model(name: str) -> nn.Module:
     if name == "segm882.0":
         return UNet3d(

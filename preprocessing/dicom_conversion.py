@@ -14,9 +14,8 @@ from rich.console import Console
 
 from utils.path_explorer import discover, get_criterion
 
-
-
 console = Console()
+
 
 def get_phase(phase: str) -> Optional[str]:
     """Classify the matched string about phase."""

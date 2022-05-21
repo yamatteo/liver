@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from torch import Tensor, sum, mean, abs, maximum, max_pool2d
+from torch import Tensor, sum, mean, abs, maximum
 
 
 def dice_distance(input: Tensor, target: Tensor, spatial_dims: list[int]) -> Tensor:

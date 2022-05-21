@@ -53,7 +53,7 @@ def tensor_slices(x: Tensor, thick: int, step: int, dim: int = -1) -> Iterator[T
     height = x.size(dim)
     n = ceil((height - thick) / step) + 1
     for j in range(n):
-        i = int(j * (height - thick) / max(1, n-1))
+        i = int(j * (height - thick) / max(1, n - 1))
         yield torch.narrow(x, dim, i, thick)
 
 

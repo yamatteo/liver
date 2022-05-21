@@ -3,10 +3,10 @@ from __future__ import annotations
 import argparse
 
 import torch
+from dataset.dataset import QuantileDataset
 from rich.console import Console
 from tqdm import tqdm
 
-from dataset.dataset import QuantileDataset
 from options import defaults
 from .models import ZPredict
 
@@ -51,8 +51,8 @@ if __name__ == '__main__':
                 {
                     "z_offset": best_z,
                     "orig_affine": case["orig_affine"],
-                    #"scan": case["orig_scan"][:, :, :, best_z:best_z + 32],
-                    #"segmentation": case["orig_segm"][:, :, best_z:best_z + 32],
+                    # "scan": case["orig_scan"][:, :, :, best_z:best_z + 32],
+                    # "segmentation": case["orig_segm"][:, :, best_z:best_z + 32],
                 },
                 opts["outputs"] / case["case_dir"] / "zwindow.pt"
             )

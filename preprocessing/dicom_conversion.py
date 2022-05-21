@@ -1,5 +1,7 @@
 import argparse
+import importlib
 import re
+import sys
 from contextlib import redirect_stderr
 from io import StringIO
 from pathlib import Path
@@ -10,11 +12,11 @@ import dicom2nifti
 import nibabel
 from rich.console import Console
 
-from options import defaults
-from path_explorer import discover, get_criterion
+from utils.path_explorer import discover, get_criterion
+
+
 
 console = Console()
-
 
 def get_phase(phase: str) -> Optional[str]:
     """Classify the matched string about phase."""
@@ -136,10 +138,17 @@ def process_dicomdir(source_path: Path, target_path: Path):
 
 
 def get_args():
-    parser = argparse.ArgumentParser(description='Convert dicom to nifti.')
-    parser.add_argument('--overwrite', action='store_true')
+    parser = argparse.ArgumentParser(description="Convert dicom to nifti.")
+    parser.add_argument("--defaults", nargs="?", default="options.py", type=Path, help="path to defaults module")
+    parser.add_argument("--outputs", type=Path, default=argparse.SUPPRESS)
+    parser.add_argument("--overwrite", action="store_true")
+    parser.add_argument("--sources", type=Path, default=argparse.SUPPRESS)
 
-    return dict(defaults, **vars(parser.parse_args()))
+    args = parser.parse_args()
+    defaults_path, defaults_module = args.defaults.parent, args.defaults.stem
+    sys.path.append(defaults_path)
+    defaults = importlib.import_module(defaults_module).defaults
+    return dict(defaults, **vars(args))
 
 
 if __name__ == "__main__":

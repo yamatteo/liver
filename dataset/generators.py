@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import itertools
 from math import ceil
 from pathlib import Path
 from typing import Iterator, Tuple
@@ -9,10 +8,9 @@ import nibabel
 import numpy as np
 import torch
 from torch import Tensor
-from torch.nn.functional import max_pool3d, avg_pool3d, one_hot, interpolate
-from torch.utils.data import Dataset
+from torch.nn.functional import avg_pool3d, one_hot
 
-from path_explorer import discover, get_criterion
+from utils.path_explorer import discover, get_criterion
 
 
 def cases(base_path: Path | str, segmented: bool) -> Iterator[Path]:

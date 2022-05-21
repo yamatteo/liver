@@ -11,7 +11,7 @@ from rich.console import Console
 
 import models
 from options import defaults
-from path_explorer import discover, get_criterion
+from utils.path_explorer import discover, get_criterion
 
 console = Console()
 classes = ["background", "liver", "tumor"]

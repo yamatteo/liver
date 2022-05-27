@@ -12,7 +12,7 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 from dataset import BufferDataset2 as BufferDataset
-from utils.generators import train_bundles
+from utils.generators import train_bundles, train_slices
 
 console = Console()
 classes = ["background", "liver", "tumor"]
@@ -91,7 +91,7 @@ classes = ["background", "liver", "tumor"]
 def train_net(device, writer_path, data_path, model):
     shutil.rmtree(Path(writer_path), ignore_errors=True)
     dataset = BufferDataset(
-        generator=train_bundles(data_path),
+        generator=train_slices(data_path, 16),
         buffer_size=100,
         train_to_valid_odds=9,
         valid_buffer_size=20

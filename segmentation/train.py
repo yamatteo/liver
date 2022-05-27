@@ -138,6 +138,7 @@ def valid_step(model, scan: Tensor, segm: Tensor, global_step: int, optimizer, w
 
 def train_cycle(model, epochs: int, dataset: BufferDataset, optimizer: AdaBelief, writer: SummaryWriter, device):
     model.train()
+    model.to(device=device, dtype=torch.float32)
     global_step = 0
     for epoch in range(epochs):
         epoch_loss = 0
@@ -150,8 +151,8 @@ def train_cycle(model, epochs: int, dataset: BufferDataset, optimizer: AdaBelief
                     unit='img'
             ) as pbar:
                 for k, (scan, segm) in dataset:
-                    scan.to(device=device)
-                    segm.to(device=device)
+                    scan.to(device=device, dtype=torch.float32)
+                    segm.to(device=device, dtype=torch.float32)
                     loss_item = train_step(model, scan=scan, segm=segm, global_step=global_step,optimizer=optimizer, writer=writer)
 
                     global_step += 1
@@ -171,8 +172,8 @@ def train_cycle(model, epochs: int, dataset: BufferDataset, optimizer: AdaBelief
                     unit='img'
             ) as pbar:
                 for k, (scan, segm) in dataset.valid_iter():
-                    scan.to(device=device)
-                    segm.to(device=device)
+                    scan.to(device=device, dtype=torch.float32)
+                    segm.to(device=device, dtype=torch.float32)
                     loss_item = valid_step(model, scan=scan, segm=segm, global_step=global_step,optimizer=optimizer, writer=writer)
 
                     global_step += 1

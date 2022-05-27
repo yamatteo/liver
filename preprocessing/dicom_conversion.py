@@ -126,6 +126,8 @@ def process_dicomdir(source_path: Path, target_path: Path):
 
         # If there is exactly one image per phase, save them as compressed nifti
         for phase in ["b", "a", "v", "t"]:
+            phases[phase].header.set_sform(phases[phase].affine)
+            phases[phase].header.set_qform(phases[phase].affine)
             nibabel.save(
                 phases[phase],
                 target_path / f"original_phase_{phase}.nii.gz",

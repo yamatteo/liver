@@ -213,7 +213,7 @@ def train_net(net, device, **opts):
 
     with torch.no_grad():
         dataset = BufferDataset(
-            tensor_generator=get_wafer(),
+            generator=get_wafer(),
             buffer_size=100,
         )
         samples(net, dataset, device)

@@ -14,6 +14,7 @@ console = Console()
 def register_case(source_path: Path, target_path: Path, niftybin: Path):
     """Register 4-phase scans with respect to phase v."""
     case_name = source_path.name
+    niftybin = Path(niftybin)
     console.print(f"[bold black]{case_name}.[/bold black] Working (it is a long process) ...")
 
     # Store the phase v as is, with its affine matrix

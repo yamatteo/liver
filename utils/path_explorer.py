@@ -65,6 +65,7 @@ def get_args():
 
 
 def criterion(
+        bundle: bool = False,
         dicom: bool = False,
         original: bool = False,
         registered: bool = False,
@@ -95,6 +96,8 @@ def criterion(
                 is_case_path = is_case_path and "segmentation.nii.gz" in files
             if predicted:
                 is_case_path = is_case_path and "prediction.nii.gz" in files
+            if bundle:
+                is_case_path = is_case_path and "train_bundle.nii.gz" in files
             return is_case_path
         else:
             return False

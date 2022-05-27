@@ -10,7 +10,7 @@ import torch.nn.functional as F
 from rich.console import Console
 
 import models
-from options import defaults
+from options import defaults as opts
 from utils.path_explorer import discover, get_criterion
 
 console = Console()
@@ -48,7 +48,6 @@ def predict_case(case: Path, net882, net, device):
 
 
 if __name__ == "__main__":
-    opts = defaults
     opts["overwrite"] = False
     opts["sources"] = os.getenv("REGISTERED_FOLDER", opts["sources"])
     opts["outputs"] = os.getenv("PREDICTION_FOLDER", opts["outputs"])

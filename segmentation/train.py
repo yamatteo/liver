@@ -137,9 +137,9 @@ def valid_step(model, scan: Tensor, segm: Tensor, global_step: int, optimizer, w
 
 
 def train_cycle(model, epochs: int, dataset: BufferDataset, optimizer: AdaBelief, writer: SummaryWriter, device):
-    console.print(f"before model {next(model.parameters()).is_cuda}")
+    # console.print(f"before model {next(model.parameters()).is_cuda}")
     model.to(device=device, dtype=torch.float32)
-    console.print(f"after model {next(model.parameters()).is_cuda}")
+    # console.print(f"after model {next(model.parameters()).is_cuda}")
     model.train()
     global_step = 0
     for epoch in range(epochs):
@@ -153,8 +153,11 @@ def train_cycle(model, epochs: int, dataset: BufferDataset, optimizer: AdaBelief
                     unit='img'
             ) as pbar:
                 for k, (scan, segm) in dataset:
+                    console.print(f"before scan {scan.is_cuda}")
                     scan.to(device=device, dtype=torch.float32)
                     segm.to(device=device, dtype=torch.float32)
+                    console.print(f"after scan {scan.is_cuda}")
+
                     loss_item = train_step(model, scan=scan, segm=segm, global_step=global_step,optimizer=optimizer, writer=writer)
 
                     global_step += 1

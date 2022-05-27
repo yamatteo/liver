@@ -107,7 +107,6 @@ def train_net(device, writer_path, data_path, model, slice_side = 16):
     )
 
     writer = SummaryWriter(writer_path)
-    model.to(device)
     train_cycle(model, epochs=1000, dataset=dataset, optimizer=optimizer, writer=writer, device=device)
 
 def train_step(model, scan: Tensor, segm: Tensor, global_step: int, optimizer, writer):
@@ -137,8 +136,10 @@ def valid_step(model, scan: Tensor, segm: Tensor, global_step: int, optimizer, w
 
 
 def train_cycle(model, epochs: int, dataset: BufferDataset, optimizer: AdaBelief, writer: SummaryWriter, device):
-    model.train()
+    console.print(f"before model {next(model.parameters()).is_cuda}")
     model.to(device=device, dtype=torch.float32)
+    console.print(f"after model {next(model.parameters()).is_cuda}")
+    model.train()
     global_step = 0
     for epoch in range(epochs):
         epoch_loss = 0

@@ -78,7 +78,7 @@ class BufferDataset2(Dataset):
         buffer = {}
 
         while len(buffer) < buffer_size:
-            console.print(f"Populating buffer {len(buffer)+1}/{buffer_size}")
+            # console.print(f"Populating buffer {len(buffer)+1}/{buffer_size}")
             k, tensor = next(cyclic_generator)
             if k in buffer:
                 warn("Buffer is larger than population.")

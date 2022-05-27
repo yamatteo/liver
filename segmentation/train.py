@@ -88,10 +88,10 @@ classes = ["background", "liver", "tumor"]
 #     ]).unsqueeze(1)
 
 
-def train_net(device, writer_path, data_path, model):
+def train_net(device, writer_path, data_path, model, slice_side = 16):
     shutil.rmtree(Path(writer_path), ignore_errors=True)
     dataset = BufferDataset(
-        generator=train_slices(data_path, 16),
+        generator=train_slices(data_path, slice_side),
         buffer_size=100,
         train_to_valid_odds=9,
         valid_buffer_size=20

@@ -116,7 +116,7 @@ class Block(Module):
                      actv_layer(actv=actv),
                      conv_layer(
                          dims=dims,
-                         in_channels=in_channels,
+                         in_channels=out_channels,
                          out_channels=out_channels
                      )
                  ] * complexity + [

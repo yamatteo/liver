@@ -124,7 +124,6 @@ def train_step(model, scan: Tensor, segm: Tensor, global_step: int, optimizer, w
 
 def valid_step(model, scan: Tensor, segm: Tensor, global_step: int, optimizer, writer):
     with torch.no_grad():
-        console.print(f"model {next(model.parameters()).is_cuda}", f"scan {scan.is_cuda}")
         loss = model.loss(scan, segm)
 
         writer.add_scalar(
@@ -153,10 +152,8 @@ def train_cycle(model, epochs: int, dataset: BufferDataset, optimizer: AdaBelief
                     unit='img'
             ) as pbar:
                 for k, (scan, segm) in dataset:
-                    console.print(f"before scan {scan.is_cuda}")
-                    scan.to(device=device, dtype=torch.float32)
-                    segm.to(device=device, dtype=torch.float32)
-                    console.print(f"after scan {scan.is_cuda}")
+                    scan = scan.to(device=device, dtype=torch.float32)
+                    segm = segm.to(device=device, dtype=torch.float32)
 
                     loss_item = train_step(model, scan=scan, segm=segm, global_step=global_step,optimizer=optimizer, writer=writer)
 
@@ -177,10 +174,8 @@ def train_cycle(model, epochs: int, dataset: BufferDataset, optimizer: AdaBelief
                     unit='img'
             ) as pbar:
                 for k, (scan, segm) in dataset.valid_iter():
-                    console.print(f"before scan {scan.is_cuda}")
                     scan = scan.to(device=device, dtype=torch.float32)
                     segm = segm.to(device=device, dtype=torch.float32)
-                    console.print(f"after scan {scan.is_cuda}")
                     loss_item = valid_step(model, scan=scan, segm=segm, global_step=global_step,optimizer=optimizer, writer=writer)
 
                     global_step += 1

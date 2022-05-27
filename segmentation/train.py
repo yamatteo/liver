@@ -124,6 +124,7 @@ def train_step(model, scan: Tensor, segm: Tensor, global_step: int, optimizer, w
 
 def valid_step(model, scan: Tensor, segm: Tensor, global_step: int, optimizer, writer):
     with torch.no_grad():
+        console.print(f"model {next(model.parameters()).is_cuda}", f"scan {scan.is_cuda}")
         loss = model.loss(scan, segm)
 
         writer.add_scalar(

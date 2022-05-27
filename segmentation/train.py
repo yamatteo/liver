@@ -178,8 +178,8 @@ def train_cycle(model, epochs: int, dataset: BufferDataset, optimizer: AdaBelief
             ) as pbar:
                 for k, (scan, segm) in dataset.valid_iter():
                     console.print(f"before scan {scan.is_cuda}")
-                    scan.to(device=device, dtype=torch.float32)
-                    segm.to(device=device, dtype=torch.float32)
+                    scan = scan.to(device=device, dtype=torch.float32)
+                    segm = segm.to(device=device, dtype=torch.float32)
                     console.print(f"after scan {scan.is_cuda}")
                     loss_item = valid_step(model, scan=scan, segm=segm, global_step=global_step,optimizer=optimizer, writer=writer)
 

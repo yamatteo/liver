@@ -12,7 +12,7 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 from dataset import BufferDataset2 as BufferDataset
-from utils.generators import train_bundles, train_slices
+from utils.generators import unpacked_train_bundles, train_slices
 
 console = Console()
 classes = ["background", "liver", "tumor"]

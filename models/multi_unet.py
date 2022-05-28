@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 from dataset import BufferDataset2 as BufferDataset
 from functions.distances import jaccard_distance
-from utils.generators import train_bundles
+from utils.generators import unpacked_train_bundles
 
 
 def actv_layer(actv: str, **_) -> Module | None:
@@ -295,78 +295,3 @@ class UNet(Module):
         liver_presence = liver_weight / (liver_weight + 1)
         tumor_presence = tumor_weight / (tumor_weight + 1)
         return (tumor_presence + liver_presence + 1) * pixel + jaccard2
-
-    def train_step(self, scan: Tensor, segm: Tensor, global_step: int):
-        self.optimizer.zero_grad(set_to_none=True)
-        loss = self.loss(scan, segm)
-
-        loss.backward()
-        self.optimizer.step()
-        self.writer.add_scalar(
-            "training_loss",
-            loss.item(),
-            global_step=global_step,
-        )
-        return loss.item()
-
-    def train_setup(self, data_path: str | Path, writer_path: str | Path):
-        shutil.rmtree(Path(writer_path), ignore_errors=True)
-        self.dataset = BufferDataset(
-            generator=train_bundles(data_path),
-            buffer_size=100,
-        )
-        self.optimizer = AdaBelief(
-            self.parameters(),
-            lr=1e-4,
-            eps=1e-8,
-            betas=(0.9, 0.999),
-            weight_decouple=False,
-            rectify=False,
-            print_change_log=False,
-        )
-
-        self.writer = SummaryWriter(writer_path)
-
-    def train_teardown(self):
-        self.dataset = None
-        self.optimizer = None
-        self.writer = None
-
-    def train_cycle(self, epochs: int):
-        self.train()
-        global_step = 0
-        for epoch in epochs:
-            epoch_loss = 0
-            losses = {}
-            with tqdm(
-                    total=len(self.dataset),
-                    desc=f'Epoch {epoch + 1}/{epochs}',
-                    unit='img'
-            ) as pbar:
-                for i, (k, (scan, segm)) in enumerate(self.dataset):
-                    loss_item = self.train_step(scan, segm, global_step)
-
-                    global_step += 1
-                    pbar.update(1)
-                    epoch_loss += loss_item
-                    losses[i] = loss_item
-                    pbar.set_postfix(**{'loss (batch)': epoch_loss})
-
-                    # Evaluation round
-                    # if global_step % 100 == 0:
-                    #     # writer.add_scalars(
-                    #     #     "evaluation",
-                    #     #     evaluate(net, valid_dl, device),
-                    #     #     global_step=global_step,
-                    #     # )
-                    #     writer.add_images(
-                    #         "samples",
-                    #         samples(net, dataset, device),
-                    #         global_step=global_step,
-                    #         dataformats="NCHW"
-                    #     )
-
-            n = 90 - min(10 * epoch, 80)
-            smallest = heapq.nsmallest(n, list(losses.keys()), lambda i: losses[i])
-            dataset.drop_by_position(list(smallest))
-            # time.sleep(1)

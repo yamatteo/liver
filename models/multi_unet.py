@@ -1,18 +1,10 @@
 from __future__ import annotations
 
-import shutil
-from pathlib import Path
-
 import torch
-from adabelief_pytorch import AdaBelief
 from torch import nn, Tensor
 from torch.nn import Module, functional
-from torch.utils.tensorboard import SummaryWriter
-from tqdm import tqdm
 
-from dataset import BufferDataset2 as BufferDataset
 from functions.distances import jaccard_distance
-from utils.generators import unpacked_train_bundles
 
 
 def actv_layer(actv: str, **_) -> Module | None:

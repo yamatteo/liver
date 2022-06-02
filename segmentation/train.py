@@ -188,7 +188,8 @@ def train_cycle(model, epochs: int, dataset: BufferDataset, optimizer: AdaBelief
                                                  writer=writer)
                     samples.append(rgb_sample(
                         scan.cpu(),
-                        functional.softmax(pred.cpu(), dim=1)[:, 1:, :, :, :],
+                        pred.cpu(),
+                        # functional.softmax(pred.cpu(), dim=1)[:, 1:, :, :, :],
                         segm.cpu(),
                         ("error", "tumor", "liver")
                     ))

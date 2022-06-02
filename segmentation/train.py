@@ -8,7 +8,8 @@ from pathlib import Path
 import torch
 from adabelief_pytorch import AdaBelief
 from rich.console import Console
-from torch import Tensor, functional
+from torch import Tensor
+from torch.nn import functional
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 

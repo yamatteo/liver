@@ -273,6 +273,10 @@ class UNet(Module):
         return self.model(x)
 
     def loss(self, scan: Tensor, segm: Tensor):
+        loss, _ = self.loss_forward(scan, segm)
+        return loss
+
+    def loss_forward(self, scan: Tensor, segm: Tensor):
         pred = self.forward(scan)
         jaccard2 = jaccard_distance(
             functional.softmax(pred, dim=1)[:, 1:, :, :, :],
@@ -286,4 +290,4 @@ class UNet(Module):
         tumor_weight = torch.sum(segm[:, 2])
         liver_presence = liver_weight / (liver_weight + 1)
         tumor_presence = tumor_weight / (tumor_weight + 1)
-        return (tumor_presence + liver_presence + 1) * pixel + jaccard2
+        return (tumor_presence + liver_presence + 1) * pixel + jaccard2, pred

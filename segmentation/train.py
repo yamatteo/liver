@@ -13,6 +13,7 @@ from tqdm import tqdm
 
 from dataset import BufferDataset2 as BufferDataset
 from utils.generators import train_slices
+from utils.image_generation import rgb_sample
 
 console = Console()
 classes = ["background", "liver", "tumor"]
@@ -126,14 +127,14 @@ def train_step(model, scan: Tensor, segm: Tensor, global_step: int, optimizer, w
 
 def valid_step(model, scan: Tensor, segm: Tensor, global_step: int, optimizer, writer):
     with torch.no_grad():
-        loss = model.loss(scan, segm)
+        loss, pred = model.loss_forward(scan, segm)
 
         writer.add_scalar(
             "validation_loss",
             loss.item(),
             global_step=global_step,
         )
-        return loss.item()
+        return loss.item(), pred
 
 
 def train_cycle(model, epochs: int, dataset: BufferDataset, optimizer: AdaBelief, writer: SummaryWriter, device):
@@ -145,6 +146,7 @@ def train_cycle(model, epochs: int, dataset: BufferDataset, optimizer: AdaBelief
     for epoch in range(epochs):
         epoch_loss = 0
         losses = {}
+        samples = []
         if epoch % 20 != 0:
 
             with tqdm(
@@ -178,28 +180,21 @@ def train_cycle(model, epochs: int, dataset: BufferDataset, optimizer: AdaBelief
                 for k, (scan, segm) in dataset.valid_iter():
                     scan = scan.to(device=device, dtype=torch.float32)
                     segm = segm.to(device=device, dtype=torch.float32)
-                    loss_item = valid_step(model, scan=scan, segm=segm, global_step=global_step, optimizer=optimizer,
+                    loss_item, pred = valid_step(model, scan=scan, segm=segm, global_step=global_step, optimizer=optimizer,
                                            writer=writer)
-
+                    samples.append(rgb_sample(scan.cpu(), pred.cpu(), segm.cpu(), ("error", "tumor", "liver")))
                     global_step += 1
                     pbar.update(1)
                     epoch_loss += loss_item
                     losses[k] = loss_item
                     pbar.set_postfix(**{'loss (batch)': epoch_loss})
 
-                    # Evaluation round
-                    # if global_step % 100 == 0:
-                    #     # writer.add_scalars(
-                    #     #     "evaluation",
-                    #     #     evaluate(net, valid_dl, device),
-                    #     #     global_step=global_step,
-                    #     # )
-                    #     writer.add_images(
-                    #         "samples",
-                    #         samples(net, dataset, device),
-                    #         global_step=global_step,
-                    #         dataformats="NCHW"
-                    #     )
+                    writer.add_images(
+                        "samples",
+                        torch.stack(samples),
+                        global_step=global_step,
+                        dataformats="NCHW"
+                    )
 
             smallest = heapq.nsmallest(10, list(losses.keys()), lambda k: losses[k])
             dataset.valid_drop(list(smallest))

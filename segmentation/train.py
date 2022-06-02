@@ -12,7 +12,7 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 from dataset import BufferDataset2 as BufferDataset
-from utils.generators import unpacked_train_bundles, train_slices
+from utils.generators import train_slices
 
 console = Console()
 classes = ["background", "liver", "tumor"]
@@ -88,10 +88,10 @@ classes = ["background", "liver", "tumor"]
 #     ]).unsqueeze(1)
 
 
-def train_net(device, writer_path, data_path, model, slice_side = 16):
+def train_net(device, writer_path, data_path, model, slice_shape=(32, 32, 8)):
     shutil.rmtree(Path(writer_path), ignore_errors=True)
     dataset = BufferDataset(
-        generator=train_slices(data_path, slice_side),
+        generator=train_slices(data_path, slice_shape),
         buffer_size=100,
         train_to_valid_odds=9,
         valid_buffer_size=20
@@ -109,6 +109,7 @@ def train_net(device, writer_path, data_path, model, slice_side = 16):
     writer = SummaryWriter(writer_path)
     train_cycle(model, epochs=1000, dataset=dataset, optimizer=optimizer, writer=writer, device=device)
 
+
 def train_step(model, scan: Tensor, segm: Tensor, global_step: int, optimizer, writer):
     optimizer.zero_grad(set_to_none=True)
     loss = model.loss(scan, segm)
@@ -122,6 +123,7 @@ def train_step(model, scan: Tensor, segm: Tensor, global_step: int, optimizer, w
     )
     return loss.item()
 
+
 def valid_step(model, scan: Tensor, segm: Tensor, global_step: int, optimizer, writer):
     with torch.no_grad():
         loss = model.loss(scan, segm)
@@ -132,7 +134,6 @@ def valid_step(model, scan: Tensor, segm: Tensor, global_step: int, optimizer, w
             global_step=global_step,
         )
         return loss.item()
-
 
 
 def train_cycle(model, epochs: int, dataset: BufferDataset, optimizer: AdaBelief, writer: SummaryWriter, device):
@@ -155,7 +156,8 @@ def train_cycle(model, epochs: int, dataset: BufferDataset, optimizer: AdaBelief
                     scan = scan.to(device=device, dtype=torch.float32)
                     segm = segm.to(device=device, dtype=torch.float32)
 
-                    loss_item = train_step(model, scan=scan, segm=segm, global_step=global_step,optimizer=optimizer, writer=writer)
+                    loss_item = train_step(model, scan=scan, segm=segm, global_step=global_step, optimizer=optimizer,
+                                           writer=writer)
 
                     global_step += 1
                     pbar.update(1)
@@ -176,7 +178,8 @@ def train_cycle(model, epochs: int, dataset: BufferDataset, optimizer: AdaBelief
                 for k, (scan, segm) in dataset.valid_iter():
                     scan = scan.to(device=device, dtype=torch.float32)
                     segm = segm.to(device=device, dtype=torch.float32)
-                    loss_item = valid_step(model, scan=scan, segm=segm, global_step=global_step,optimizer=optimizer, writer=writer)
+                    loss_item = valid_step(model, scan=scan, segm=segm, global_step=global_step, optimizer=optimizer,
+                                           writer=writer)
 
                     global_step += 1
                     pbar.update(1)
@@ -200,4 +203,3 @@ def train_cycle(model, epochs: int, dataset: BufferDataset, optimizer: AdaBelief
 
             smallest = heapq.nsmallest(10, list(losses.keys()), lambda k: losses[k])
             dataset.valid_drop(list(smallest))
-

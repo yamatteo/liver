@@ -24,4 +24,4 @@ model = UNet(
     channels=[4, 32, 64, 128]
 )
 
-train_net(device=device, writer_path=writer_path, data_path=data_path, model=model, slice_side=int(os.getenv("SLICE_SIDE")))
+train_net(device=device, writer_path=writer_path, data_path=data_path, model=model, slice_shape=eval(os.getenv("SLICE_SHAPE")))

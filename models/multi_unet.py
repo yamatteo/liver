@@ -263,7 +263,7 @@ class UNet(Module):
                 out_channels=final_classes,
                 kernel_size=(1, 1, 1),
             ),
-            nn.Sigmoid()
+            nn.Hardsigmoid()
         )
         self.dataset = None
         self.optimizer = None

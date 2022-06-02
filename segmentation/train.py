@@ -8,7 +8,7 @@ from pathlib import Path
 import torch
 from adabelief_pytorch import AdaBelief
 from rich.console import Console
-from torch import Tensor
+from torch import Tensor, functional
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
@@ -185,7 +185,12 @@ def train_cycle(model, epochs: int, dataset: BufferDataset, optimizer: AdaBelief
                     segm = segm.to(device=device, dtype=torch.float32)
                     loss_item, pred = valid_step(model, scan=scan, segm=segm, global_step=global_step, optimizer=optimizer,
                                                  writer=writer)
-                    samples.append(rgb_sample(scan.cpu(), pred.cpu(), segm.cpu(), ("error", "tumor", "liver")))
+                    samples.append(rgb_sample(
+                        scan.cpu(),
+                        functional.softmax(pred.cpu(), dim=1)[:, 1:, :, :, :],
+                        segm.cpu(),
+                        ("error", "tumor", "liver")
+                    ))
                     global_step += 1
                     pbar.update(1)
                     epoch_loss += loss_item

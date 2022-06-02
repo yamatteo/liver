@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import heapq
+import os
 import shutil
 from pathlib import Path
 
@@ -198,3 +199,5 @@ def train_cycle(model, epochs: int, dataset: BufferDataset, optimizer: AdaBelief
 
             smallest = heapq.nsmallest(10, list(losses.keys()), lambda k: losses[k])
             dataset.valid_drop(list(smallest))
+
+        torch.save(model.cpu().state_dict(), Path(os.getenv("SAVED_MODELS")) / "last_checkpoint.pth")

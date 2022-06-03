@@ -52,8 +52,8 @@ def wandb_sample(scan: Tensor, pred: Tensor, segm: Tensor):
     z = random.randint(0, scan.size(4)-1)
     image = get_white(scan)[n, 0, :, :, z].unsqueeze(-1).numpy()
     class_labels = ["background", "liver", "tumor"]
-    pred_mask = torch.argmax(pred, dim=1)
-    segm_mask = torch.argmax(segm, dim=1)
+    pred_mask = torch.argmax(pred, dim=1)[n, :, :, z]
+    segm_mask = torch.argmax(segm, dim=1)[n, :, :, z]
     return wandb.Image(image, masks={
         "predictions": {
             "mask_data": pred_mask,

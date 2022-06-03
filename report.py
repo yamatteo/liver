@@ -17,6 +17,6 @@ def init(backend: str = "wandb"):
 
 def append(items: dict):
     if module_backend == "wandb":
-        wandb.log(dict)
+        wandb.log(items)
     else:
         print(items)

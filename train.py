@@ -82,7 +82,7 @@ def valid_step(scan: Tensor, segm: Tensor, *, model, keys) -> tuple[float, dict[
             "valid_loss": loss.item(),
             "valid_jd": torch.mean(batch_jd).item(),
             "valid_l1": torch.mean(batch_jd).item(),
-            "sample": wandb_sample(scan, pred, segm)
+            "sample": wandb_sample(scan.cpu(), pred.cpu(), segm.cpu())
         })
         return loss.item(), batch_losses_items
 

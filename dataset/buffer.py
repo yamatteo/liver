@@ -4,6 +4,7 @@ import itertools
 from typing import Iterator
 from warnings import warn
 
+import torch
 from rich.console import Console
 from torch import Tensor
 from torch.utils.data import Dataset
@@ -73,9 +74,10 @@ class BufferDataset(Dataset):
 
 
 class BufferDataset2(Dataset):
-    def __init__(self, generator: Iterator, buffer_size: int, train_to_valid_odds: int, valid_buffer_size: int):
+    def __init__(self, generator: Iterator, *, buffer_size: int, train_to_valid_odds: int, valid_buffer_size: int, batch_size:int = 1):
         cyclic_generator = itertools.cycle(enumerate(generator))
         buffer = {}
+        self.batch_size = batch_size
 
         while len(buffer) < buffer_size:
             # console.print(f"Populating buffer {len(buffer)+1}/{buffer_size}")
@@ -116,6 +118,18 @@ class BufferDataset2(Dataset):
     def __getitem__(self, i) -> tuple[int, Tensor]:
         k = self.keys[i]
         return k, self.buffer[k]
+
+    def train_batches(self):
+        batch_keys = [self.keys[i:i + self.batch_size] for i in range(0, len(self.keys), self.batch_size)]
+        for keys in batch_keys:
+            batch = torch.cat([self.buffer[k] for k in keys])
+            yield keys, (batch[:, 0:4], batch[:, 4:7])
+
+    def valid_batches(self):
+        batch_keys = [self.valid_keys[i:i + self.batch_size] for i in range(0, len(self.valid_keys), self.batch_size)]
+        for keys in batch_keys:
+            batch = torch.cat([self.valid_buffer[k] for k in keys])
+            yield keys, (batch[:, 0:4], batch[:, 4:7])
 
     def valid_iter(self):
         return self.valid_buffer.items()

@@ -54,7 +54,7 @@ def compose_tensor_slices(t_gen: Iterator[Tensor], thickness: int, dim: int) -> 
         yield from tensor_slices(t, thickness, dim)
 
 
-def train_slices(base_path: Path | str, shape: tuple[int, int, int]) -> Iterator[tuple[Tensor, Tensor]]:
+def train_slices(base_path: Path | str, shape: tuple[int, int, int], split=False) -> Iterator[tuple[Tensor, Tensor]]:
     """Iterate over NCHWD training tensors. Yields (scan, segm) tuple.
 
     scan: N=1. C=4 (bavt). HWD=shape.
@@ -63,8 +63,11 @@ def train_slices(base_path: Path | str, shape: tuple[int, int, int]) -> Iterator
     t_gen = compose_tensor_slices(t_gen, shape[0], 2)
     t_gen = compose_tensor_slices(t_gen, shape[1], 3)
     t_gen = compose_tensor_slices(t_gen, shape[2], 4)
-    for t in t_gen:
-        yield t[:, 0:4], t[:, 4:7]
+    if split:
+        for t in t_gen:
+            yield t[:, 0:4], t[:, 4:7]
+    else:
+        yield from t_gen
 
 
 def _cases(base_path: Path | str, accepted_dir: Callable[[Path], bool]) -> Iterator[Path]:

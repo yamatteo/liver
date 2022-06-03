@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import importlib
 import random
 
 import torch
 from torch import Tensor
 
+try:
+    wandb = importlib.import_module("wandb")
+except ImportError:
+    wandb = None
 
 def get_white(scan: Tensor) -> Tensor:
     return (50 + torch.clamp(scan[:, 2:3, :, :, :], -50, 250)) / 300
@@ -42,7 +47,23 @@ def rgb_sample(scan: Tensor, pred: Tensor, segm: Tensor, mode: tuple[str, str, s
         z = random.randint(0, scan.size(4) - 1)
     return rgb[0, :, :, :, z]  # shape is (C=3, H=512, W=512)
 
-
+def wandb_sample(scan: Tensor, pred: Tensor, segm: Tensor):
+    n = random.randint(0, scan.size(0)-1)
+    z = random.randint(0, scan.size(4)-1)
+    image = get_white(scan)[n, 0, :, :, z].unsqueeze(-1).numpy()
+    class_labels = ["background", "liver", "tumor"]
+    pred_mask = torch.argmax(pred, dim=1)
+    segm_mask = torch.argmax(segm, dim=1)
+    return wandb.Image(image, masks={
+        "predictions": {
+            "mask_data": pred_mask,
+            "class_labels": class_labels
+        },
+        "ground_truth": {
+            "mask_data": segm_mask,
+            "class_labels": class_labels
+        },
+    })
 @torch.no_grad()
 def samples(net, ds, device=torch.device("cpu"), mode=("error", "tumor", "liver"), k=4, indices=None):
     if indices is None:

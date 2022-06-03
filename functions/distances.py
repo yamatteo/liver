@@ -28,6 +28,27 @@ def jaccard_distance(input: Tensor, target: Tensor) -> Tensor:
         / (sum(maximum(input, target), dim=(2, 3, 4)) + 1),
     )
 
+def batch_jaccard_distance(input: Tensor, target: Tensor) -> Tensor:
+    """TODO
+
+    :param input: some tensor (N, C, H, W, D) with values in [0, 1]
+    :param target: some tensor (N, C, H, W, D) with values in [0, 1], with the same size as input
+    :return: a (N, ) tensor
+    """
+    return mean(
+        sum(abs(input - target), dim=(2, 3, 4))
+        / (sum(maximum(input, target), dim=(2, 3, 4)) + 1),
+        dim=1
+    )
+
+def batch_l1_loss(input: Tensor, target: Tensor) -> Tensor:
+    """TODO
+
+    :param input: some tensor (N, C, H, W, D) with values in [0, 1]
+    :param target: some tensor (N, C, H, W, D) with values in [0, 1], with the same size as input
+    :return: a (N, ) tensor
+    """
+    return mean(abs(input - target), dim=(1, 2, 3, 4))
 # def halfway_jaccard_distance(input: Tensor, target: Tensor) -> Tensor:
 #     """Dissimilarity of input and target classifications.
 #

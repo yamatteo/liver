@@ -265,9 +265,6 @@ class UNet(Module):
             ),
             nn.Hardsigmoid()
         )
-        self.dataset = None
-        self.optimizer = None
-        self.writer = None
 
     def forward(self, x: Tensor) -> Tensor:
         return self.model(x)

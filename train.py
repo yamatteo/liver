@@ -114,7 +114,7 @@ def train_cycle(model, *, epochs: int, dataset: BufferDataset, optimizer: AdaBel
 
             smallest = heapq.nsmallest(train_drop, list(losses.keys()), lambda k: losses[k])
             dataset.drop(list(smallest))
-            console.print("dropping", {k: losses[k] for k in smallest})
+            # console.print("dropping", {k: losses[k] for k in smallest})
 
             torch.save(model.cpu().state_dict(), Path(os.getenv("SAVED_MODELS")) / "last_checkpoint.pth")
             model.to(device=device)

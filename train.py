@@ -13,7 +13,7 @@ from tqdm import tqdm
 from dataset import BufferDataset2 as BufferDataset
 from functions.distances import batch_jaccard_distance, batch_l1_loss
 import report
-from utils.image_generation import wandb_sample
+from utils.image_generation import wandb_sample_debug as wandb_sample
 
 console = Console()
 
@@ -82,7 +82,7 @@ def valid_step(scan: Tensor, segm: Tensor, *, model, keys) -> tuple[float, dict[
             "valid_loss": loss.item(),
             "valid_jd": torch.mean(batch_jd).item(),
             "valid_l1": torch.mean(batch_l1).item(),
-            "sample": wandb_sample(scan.cpu(), pred.cpu(), segm.cpu())
+            "sample": wandb_sample(scan=scan.cpu(), pred=pred.cpu(), segm=segm.cpu())
         })
         return loss.item(), batch_losses_items
 

@@ -11,6 +11,16 @@ try:
 except ImportError:
     wandb = None
 
+from rich.console import Console
+from torch import Tensor
+from tqdm import tqdm
+
+from dataset import BufferDataset2 as BufferDataset
+from functions.distances import batch_jaccard_distance, batch_l1_loss
+import report
+
+console = Console()
+
 def get_white(scan: Tensor) -> Tensor:
     return (50 + torch.clamp(scan[:, 2:3, :, :, :], -50, 250)) / 300
 
@@ -58,6 +68,7 @@ def wandb_sample(scan: Tensor, pred: Tensor, segm: Tensor):
     }
     pred_mask = torch.argmax(pred, dim=1)[n, :, :, z].numpy()
     segm_mask = torch.argmax(segm, dim=1)[n, :, :, z].numpy()
+
     return wandb.Image(image, masks={
         "predictions": {
             "mask_data": pred_mask,
@@ -68,6 +79,32 @@ def wandb_sample(scan: Tensor, pred: Tensor, segm: Tensor):
             "class_labels": class_labels
         },
     })
+
+def wandb_sample_debug(scan: Tensor, pred: Tensor, segm: Tensor):
+    n = random.randint(0, scan.size(0)-1)
+    z = random.randint(0, scan.size(4)-1)
+    image = get_white(scan)[n, 0, :, :, z].unsqueeze(-1).numpy()
+    class_labels = {
+        0: "background",
+        1: "liver",
+        2: "tumor"
+    }
+    pred_mask = torch.argmax(pred, dim=1)[n, :, :, z].numpy()
+    segm_mask = torch.argmax(segm, dim=1)[n, :, :, z].numpy()
+
+    console.print(f"pre  liver weight {torch.sum(segm[n, 1, :, :, z])}")
+    console.print(f"post liver weight {torch.sum(segm_mask == 1)}")
+    return wandb.Image(image, masks={
+        "predictions": {
+            "mask_data": pred_mask,
+            "class_labels": class_labels
+        },
+        "ground_truth": {
+            "mask_data": segm_mask,
+            "class_labels": class_labels
+        },
+    })
+
 @torch.no_grad()
 def samples(net, ds, device=torch.device("cpu"), mode=("error", "tumor", "liver"), k=4, indices=None):
     if indices is None:

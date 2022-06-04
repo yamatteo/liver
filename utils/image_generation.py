@@ -93,7 +93,7 @@ def wandb_sample_debug(scan: Tensor, pred: Tensor, segm: Tensor):
     segm_mask = torch.argmax(segm, dim=1)[n, :, :, z].numpy()
 
     console.print(f"pre  liver weight {torch.sum(segm[n, 1, :, :, z])}")
-    console.print(f"post liver weight {torch.sum(segm_mask == 1)}")
+    console.print(f"post liver weight {torch.sum(torch.argmax(segm, dim=1)[n, :, :, z] == 1)}")
     return wandb.Image(image, masks={
         "predictions": {
             "mask_data": pred_mask,

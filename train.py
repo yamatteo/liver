@@ -39,7 +39,7 @@ def train_step(scan: Tensor, segm: Tensor, *, model, optimizer, keys) -> tuple[f
 
     batch_jd = batch_jaccard_distance(pred, segm)
     batch_l1 = batch_l1_loss(pred, segm)
-    batch_loss = batch_jd + batch_l1
+    batch_loss = batch_l1  # + batch_jd
     batch_losses_items = {k: batch_loss[i].item() for i, k in enumerate(keys)}
 
     loss = torch.mean(batch_loss)

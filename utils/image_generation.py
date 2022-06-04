@@ -4,7 +4,6 @@ import importlib
 import random
 
 import torch
-from torch import Tensor
 
 try:
     wandb = importlib.import_module("wandb")
@@ -13,13 +12,9 @@ except ImportError:
 
 from rich.console import Console
 from torch import Tensor
-from tqdm import tqdm
-
-from dataset import BufferDataset2 as BufferDataset
-from functions.distances import batch_jaccard_distance, batch_l1_loss
-import report
 
 console = Console()
+
 
 def get_white(scan: Tensor) -> Tensor:
     return (50 + torch.clamp(scan[:, 2:3, :, :, :], -50, 250)) / 300
@@ -57,9 +52,10 @@ def rgb_sample(scan: Tensor, pred: Tensor, segm: Tensor, mode: tuple[str, str, s
         z = random.randint(0, scan.size(4) - 1)
     return rgb[0, :, :, :, z]  # shape is (C=3, H=512, W=512)
 
+
 def wandb_sample(scan: Tensor, pred: Tensor, segm: Tensor):
-    n = random.randint(0, scan.size(0)-1)
-    z = random.randint(0, scan.size(4)-1)
+    n = random.randint(0, scan.size(0) - 1)
+    z = random.randint(0, scan.size(4) - 1)
     image = get_white(scan)[n, 0, :, :, z].unsqueeze(-1).numpy()
     class_labels = {
         0: "background",
@@ -80,9 +76,10 @@ def wandb_sample(scan: Tensor, pred: Tensor, segm: Tensor):
         },
     })
 
+
 def wandb_sample_debug(scan: Tensor, pred: Tensor, segm: Tensor):
-    n = random.randint(0, scan.size(0)-1)
-    z = random.randint(0, scan.size(4)-1)
+    n = random.randint(0, scan.size(0) - 1)
+    z = random.randint(0, scan.size(4) - 1)
     image = get_white(scan)[n, 0, :, :, z].unsqueeze(-1).numpy()
     class_labels = {
         0: "background",
@@ -92,18 +89,20 @@ def wandb_sample_debug(scan: Tensor, pred: Tensor, segm: Tensor):
     pred_mask = torch.argmax(pred, dim=1)[n, :, :, z].numpy()
     segm_mask = torch.argmax(segm, dim=1)[n, :, :, z].numpy()
 
-    console.print(f"pre  liver weight {torch.sum(segm[n, 1, :, :, z])}")
-    console.print(f"post liver weight {torch.sum(torch.argmax(segm, dim=1)[n, :, :, z] == 1)}")
+    # console.print(f"pre  liver weight {torch.sum(segm[n, 1, :, :, z])}")
+    # console.print(f"post liver weight {torch.sum(torch.argmax(segm, dim=1)[n, :, :, z] == 1)}")
     return wandb.Image(image, masks={
         "predictions": {
             "mask_data": pred_mask,
             "class_labels": class_labels
         },
+    }), wandb.Image(image, masks={
         "ground_truth": {
             "mask_data": segm_mask,
             "class_labels": class_labels
-        },
-    }), (wandb.Image(segm[n, 1, :, :, z].numpy()), wandb.Image(pred[n, 1, :, :, z].numpy()))
+        }
+    })
+
 
 @torch.no_grad()
 def samples(net, ds, device=torch.device("cpu"), mode=("error", "tumor", "liver"), k=4, indices=None):

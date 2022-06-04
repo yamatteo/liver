@@ -21,7 +21,6 @@ from dataset import BufferDataset2 as BufferDataset
 from models.multi_unet import UNet
 from utils.generators import train_slices
 
-
 # wandb.init(project="liver-tumor-detecton", entity="yamatteo")
 # wandb.config = {
 #   "learning_rate": 1e-4,
@@ -32,6 +31,8 @@ from utils.generators import train_slices
 console = Console()
 report.init(backend="none")
 dotenv.load_dotenv()
+
+Path(os.getenv("SAVED_MODELS")).mkdir(exist_ok=True)
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 console.print(f"Running on {device}")
@@ -52,10 +53,10 @@ shutil.rmtree(Path(writer_path), ignore_errors=True)
 
 dataset = BufferDataset(
     generator=train_slices(data_path, slice_shape),
-    buffer_size=50,
-    train_to_valid_odds=10,
-    valid_buffer_size=5,
-    batch_size=5
+    buffer_size=64,
+    train_to_valid_odds=16,
+    valid_buffer_size=4,
+    batch_size=4,
 )
 
 optimizer = AdaBelief(
@@ -69,6 +70,6 @@ optimizer = AdaBelief(
 )
 
 # writer = SummaryWriter(str(writer_path))
-epochs = 10
+epochs = 100
 
 train_cycle(model, epochs=epochs, dataset=dataset, optimizer=optimizer, device=device, train_drop=5)

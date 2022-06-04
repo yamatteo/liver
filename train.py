@@ -78,14 +78,13 @@ def valid_step(scan: Tensor, segm: Tensor, *, model, keys) -> tuple[float, dict[
         batch_losses_items = {k: batch_loss[i].item() for i, k in enumerate(keys)}
 
         loss = torch.mean(batch_loss)
-        sample, debug_sample = wandb_sample_debug(scan=scan.cpu(), pred=pred.cpu(), segm=segm.cpu())
+        # sample, debug_sample = wandb_sample_debug(scan=scan.cpu(), pred=pred.cpu(), segm=segm.cpu())
         report.append({
             "valid_loss": loss.item(),
             "valid_jd": torch.mean(batch_jd).item(),
             "valid_l1": torch.mean(batch_l1).item(),
             # "sample": wandb_sample(scan=scan.cpu(), pred=pred.cpu(), segm=segm.cpu()),
-            "sample": sample,
-            "debug_sample": debug_sample
+            "sample": wandb_sample_debug(scan=scan.cpu(), pred=pred.cpu(), segm=segm.cpu()),
         })
         return loss.item(), batch_losses_items
 
@@ -115,9 +114,10 @@ def train_cycle(model, *, epochs: int, dataset: BufferDataset, optimizer: AdaBel
 
             smallest = heapq.nsmallest(train_drop, list(losses.keys()), lambda k: losses[k])
             dataset.drop(list(smallest))
+            console.print("dropping", {k: losses[k] for k in smallest})
 
             torch.save(model.cpu().state_dict(), Path(os.getenv("SAVED_MODELS")) / "last_checkpoint.pth")
-            model.cuda()
+            model.to(device=device)
 
             losses = {}
             for keys, (scan, segm) in dataset.valid_batches():

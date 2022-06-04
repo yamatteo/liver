@@ -103,7 +103,7 @@ def wandb_sample_debug(scan: Tensor, pred: Tensor, segm: Tensor):
             "mask_data": segm_mask,
             "class_labels": class_labels
         },
-    }), wandb.Image(segm[n, 1, :, :, z].numpy())
+    }), (wandb.Image(segm[n, 1, :, :, z].numpy()), wandb.Image(pred[n, 1, :, :, z].numpy()))
 
 @torch.no_grad()
 def samples(net, ds, device=torch.device("cpu"), mode=("error", "tumor", "liver"), k=4, indices=None):

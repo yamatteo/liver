@@ -46,7 +46,7 @@ try:
 except FileNotFoundError:
     pass
 
-slice_shape = (256, 256, 8)
+slice_shape = (64, 64, 8)
 
 shutil.rmtree(Path(writer_path), ignore_errors=True)
 

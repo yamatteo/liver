@@ -48,7 +48,7 @@ def train_step(scan: Tensor, segm: Tensor, *, model, optimizer, keys) -> tuple[f
     report.append({
         "train_loss": loss.item(),
         "train_jd": torch.mean(batch_jd).item(),
-        "train_l1": torch.mean(batch_jd).item(),
+        "train_l1": torch.mean(batch_l1).item(),
     })
     return loss.item(), batch_losses_items
 
@@ -81,7 +81,7 @@ def valid_step(scan: Tensor, segm: Tensor, *, model, keys) -> tuple[float, dict[
         report.append({
             "valid_loss": loss.item(),
             "valid_jd": torch.mean(batch_jd).item(),
-            "valid_l1": torch.mean(batch_jd).item(),
+            "valid_l1": torch.mean(batch_l1).item(),
             "sample": wandb_sample(scan.cpu(), pred.cpu(), segm.cpu())
         })
         return loss.item(), batch_losses_items

@@ -49,17 +49,6 @@ class IntBundle(Tensor):
 
 class FloatBatchBundle(Tensor):
     fixed_shape = {"N": None, "C": 7, "H": None, "W": None, "D": None}
-    # @staticmethod
-    # def __new__(cls, x, *args, **kwargs):
-    #     return torch.tensor(x, dtype=torch.float32)
-    #     # return super().__new__(cls, x, *args, **kwargs).to(dtype=torch.float32)
-    #
-    # def __init__(self, *args, **kwargs):
-    #     super(FloatBatchBundle, self).__init__()
-    #     assert len(self.shape) == 5, \
-    #         f"FloatBatchBundle should be a (N, C, H, W, D) shaped vector, got {self.shape}."
-    #     assert self.size(1) == 7, \
-    #         f"Channels should be 7: four phases and three for one-hot ground-truth segmentation, got {self.shape}."
 
     @classmethod
     def cat(cls, inputs: list[FloatBatchBundle]) -> FloatBatchBundle:
@@ -88,34 +77,33 @@ class FloatBatchBundle(Tensor):
             for w_slice in h_slice.dimensional_slices(shape[1], 3):
                 yield from w_slice.dimensional_slices(shape[2], 4)
 
+class Plane(Tensor):
+    fixed_shape = {"H": None, "W": None}
 
 class ScanBatch(Tensor):
     fixed_shape = {"N": None, "C": 4, "H": None, "W": None, "D": None}
-    # @staticmethod
-    # def __new__(cls, x, *args, **kwargs):
-    #     return super().__new__(cls, x, *args, **kwargs).to(dtype=torch.float32)
 
-    # def __init__(self, *args, **kwargs):
-    #     super(ScanBatch, self).__init__()
-    #     assert len(self.shape) == 5, \
-    #         f"ScanBatch should be a (N, C, H, W, D) shaped vector, got {self.shape}."
-    #     assert self.size(1) == 4, \
-    #         f"Channels should be four phases, got {self.shape}."
-
+    def get_plane(self, *, n: int, phase: int | str, z: int) -> Plane:
+        if isinstance(phase, str):
+            phase = {
+                "b": 0,
+                "a": 1,
+                "v": 2,
+                "t": 3
+            }[phase]
+            return Plane(self[n, phase, :, :, z])
 
 class FloatSegmBatch(Tensor):
     fixed_shape = {"N": None, "C": 3, "H": None, "W": None, "D": None}
 
-    # @staticmethod
-    # def __new__(cls, x, *args, **kwargs):
-    #     return super().__new__(cls, x, *args, **kwargs).to(dtype=torch.float32)
-
-    # def __init__(self, *args, **kwargs):
-    #     super(FloatSegmBatch, self).__init__()
-    #     assert len(self.shape) == 5, \
-    #         f"FloatSegmBatch should be a (N, C, H, W, D) shaped vector, got {self.shape}."
-    #     assert self.size(1) == 3, \
-    #         f"Channels should be three for one-hot segmentation, got {self.shape}."
+    def get_plane(self, *, n: int, klass: int | str, z: int) -> Plane:
+        if isinstance(klass, str):
+            klass = {
+                "backg": 0,
+                "liver": 1,
+                "tumor": 2,
+            }[klass]
+            return Plane(self[n, klass, :, :, z])
 
     def distance_from(self, other: FloatSegmBatch) -> tuple[BatchDistance, dict]:
         asyml1, asyml1_items = self.asyml1_df(other)
@@ -134,16 +122,15 @@ class FloatSegmBatch(Tensor):
         }
         return BatchDistance(torch.sum(channel_weights * channel_distances, dim=1)), items
 
+    def as_int(self) -> IntSegmBatch:
+        return IntSegmBatch(torch.argmax(self, dim=1))
 
-# class IntSegmTensor(Tensor):
-#     fixed_shape = {"N": None, "C": 7, "H": None, "W": None, "D": None}
-#
-#     def __init__(self, *args, **kwargs):
-#         super(IntSegmTensor, self).__init__()
-#         assert len(self.shape) == 5, \
-#             f"ScanTensor should be a (N, C, H, W, D) shaped vector, got {self.shape}."
-#         assert self.size(1) == 3, \
-#             f"Channels should be three for one-hot segmentation, got {self.shape}."
+
+class IntSegmBatch(Tensor):
+    fixed_shape = {"N": None, "H": None, "W": None, "D": None}
+
+    def get_plane(self, *, n: int, z: int) -> Plane:
+        return Plane(self[n, :, :, z])
 
 
 class BatchDistance(Tensor):

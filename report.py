@@ -27,20 +27,20 @@ def append(items: dict):
         print(items)
 
 
-def sample(scan: Tensor, pred: Tensor, segm: Tensor):
+def sample(scan: ScanBatch, pred: FloatSegmBatch, segm: FloatSegmBatch):
     if module_backend == "wandb":
         n = random.randint(0, scan.size(0) - 1)
         z = random.randint(0, scan.size(4) - 1)
-        image = get_white(scan)[n, 0, :, :, z].unsqueeze(-1).numpy()
-        liver_image = rgb_sample(scan, pred, segm, mode=("pred_liver", "liver", "background")).permute(1, 2, 0)
-        tumor_image = rgb_sample(scan, pred, segm, mode=("pred_tumor", "tumor", "background")).permute(1, 2, 0)
+        image = get_white(scan, n=n, z=z).numpy()
+        liver_image = rgb_sample(scan, pred, segm, mode=("pred_liver", "liver", "background"), n=n, z=z, format="HWC")
+        tumor_image = rgb_sample(scan, pred, segm, mode=("pred_tumor", "tumor", "background"), n=n, z=z, format="HWC")
         class_labels = {
             0: "background",
             1: "liver",
             2: "tumor"
         }
-        pred_mask = torch.argmax(pred, dim=1)[n, :, :, z].numpy()
-        segm_mask = torch.argmax(segm, dim=1)[n, :, :, z].numpy()
+        pred_mask = pred.as_int().get_plane(n=n, z=z).numpy()
+        segm_mask = segm.as_int().get_plane(n=n, z=z).numpy()
 
         # console.print(f"pre  liver weight {torch.sum(segm[n, 1, :, :, z])}")
         # console.print(f"post liver weight {torch.sum(torch.argmax(segm, dim=1)[n, :, :, z] == 1)}")

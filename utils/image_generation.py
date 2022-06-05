@@ -11,46 +11,39 @@ except ImportError:
     wandb = None
 
 from rich.console import Console
-from torch import Tensor
+from tensors import *
 
 console = Console()
 
 
-def get_white(scan: Tensor) -> Tensor:
-    return (50 + torch.clamp(scan[:, 2:3, :, :, :], -50, 250)) / 300
+def get_white(scan: ScanBatch, *, n, phase="v", z) -> Plane:
+    return (50 + torch.clamp(scan.get_plane(n=n, phase=phase, z=z), -50, 250)) / 300
 
 
-def get_color(scan: Tensor, pred: Tensor, segm: Tensor, mode: str = "none"):
+def get_color(scan: ScanBatch, pred: FloatSegmBatch, segm: FloatSegmBatch, *, n, z, mode: str = "none") -> Plane:
     if mode == "error":
-        color = torch.sum(torch.abs(segm - pred), dim=1, keepdim=True)
-    elif mode == "background":
-        color = segm[:, 0:1, :, :, :]
-    elif mode == "liver":
-        color = segm[:, 1:2, :, :, :]
-    elif mode == "tumor":
-        color = segm[:, 2:3, :, :, :]
-    elif mode == "pred_background":
-        color = pred[:, 0:1, :, :, :]
-    elif mode == "pred_liver":
-        color = pred[:, 1:2, :, :, :]
-    elif mode == "pred_tumor":
-        color = pred[:, 2:3, :, :, :]
+        # color = torch.sum(torch.abs(segm - pred), dim=1, keepdim=True)
+        color = torch.sum(torch.abs(segm - pred), dim=1, keepdim=True).get_plane(n=n, klass=0, z=z)
+    elif mode in ("backg", "liver", "tumor"):
+        color = segm.get_plane(n=n, klass=mode, z=z)
+    elif mode in ("pred_backg", "pred_liver", "pred_tumor"):
+        color = pred.get_plane(n=n, klass=mode[5:], z=z)
     else:
         color = 0
-    return torch.clamp(
-        torch.as_tensor(get_white(scan)) + torch.as_tensor(color),
-        0, 1
-    )
+    return Plane(torch.clamp(get_white(scan) + color, 0, 1))
 
 
-def rgb_sample(scan: Tensor, pred: Tensor, segm: Tensor, mode: tuple[str, str, str], z: int | None = None):
-    rgb = torch.cat([
-        get_color(scan, pred, segm, mode=color_mode)
-        for color_mode in mode
-    ], dim=1)
+def rgb_sample(scan: ScanBatch, pred: FloatSegmBatch, segm: FloatSegmBatch, *, n, z: int | None = None, mode: tuple[str, str, str], format: str = "CHW"):
     if z is None:
         z = random.randint(0, scan.size(4) - 1)
-    return rgb[0, :, :, :, z]  # shape is (C=3, H=512, W=512)
+    rgb = torch.stack(
+        [
+            get_color(scan, pred, segm, n=n, z=z, mode=color_mode)
+            for color_mode in mode
+        ],
+        dim=2 if format=="HWC" else 0
+    )
+    return rgb  # shape is same as `format`
 
 
 def wandb_sample(scan: Tensor, pred: Tensor, segm: Tensor):

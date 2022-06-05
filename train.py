@@ -13,16 +13,17 @@ from tqdm import tqdm
 from dataset import BufferDataset2 as BufferDataset
 from functions.distances import batch_jaccard_distance, batch_l1_loss
 import report
+from models.multi_unet import UNet
 from utils.image_generation import wandb_sample, wandb_sample_debug
+from tensors import *
 
 console = Console()
 
 
-def train_step(scan: Tensor, segm: Tensor, *, model, optimizer, keys) -> tuple[float, dict[int, float]]:
+def train_step(scan: ScanBatch, segm: FloatSegmBatch, *, model: UNet, optimizer, keys) -> tuple[float, dict[int, float]]:
     model.train()
     optimizer.zero_grad(set_to_none=True)
-    pred = model(scan)
-
+    pred = model.forward(scan)
     # pure_jaccard = jaccard_distance(pred, segm)
     #
     # jaccard = jaccard_distance(
@@ -36,56 +37,32 @@ def train_step(scan: Tensor, segm: Tensor, *, model, optimizer, keys) -> tuple[f
     # )
     #
     # pixel = functional.l1_loss(pred, segm)
+    # batch_jd = batch_jaccard_distance(pred, segm)
+    # batch_l1 = batch_l1_loss(pred, segm)
+    # batch_loss = batch_l1  # + batch_jd
+    batch_losses, info_items = pred.distance_from(segm)
+    batch_losses_items = {k: batch_losses[i].item() for i, k in enumerate(keys)}
 
-    batch_jd = batch_jaccard_distance(pred, segm)
-    batch_l1 = batch_l1_loss(pred, segm)
-    batch_loss = batch_l1  # + batch_jd
-    batch_losses_items = {k: batch_loss[i].item() for i, k in enumerate(keys)}
-
-    loss = torch.mean(batch_loss)
+    loss = torch.mean(batch_losses)
     loss.backward()
     optimizer.step()
-    report.append({
-        "train_loss": loss.item(),
-        "train_jd": torch.mean(batch_jd).item(),
-        "train_l1": torch.mean(batch_l1).item(),
-    })
-    return loss.item(), batch_losses_items
+    info_items["train"] = loss.item()
+    report.append(info_items)
+    return info_items["train"], batch_losses_items
 
 
 def valid_step(scan: Tensor, segm: Tensor, *, model, keys) -> tuple[float, dict[int, float]]:
     model.eval()
     with torch.no_grad():
-        pred = model(scan)
+        pred = model.forward(scan)
+        batch_losses, info_items = pred.distance_from(segm)
+        batch_losses_items = {k: batch_losses[i].item() for i, k in enumerate(keys)}
 
-        # pure_jaccard = jaccard_distance(pred, segm)
-        #
-        # jaccard = jaccard_distance(
-        #     functional.softmax(pred, dim=1),
-        #     segm
-        # )
-        #
-        # jaccard2 = jaccard_distance(
-        #     functional.softmax(pred, dim=1)[:, 1:, :, :, :],
-        #     segm[:, 1:, :, :, :]
-        # )
-        #
-        # pixel = functional.l1_loss(pred, segm)
-
-        batch_jd = batch_jaccard_distance(pred, segm)
-        batch_l1 = batch_l1_loss(pred, segm)
-        batch_loss = batch_jd + batch_l1
-        batch_losses_items = {k: batch_loss[i].item() for i, k in enumerate(keys)}
-
-        loss = torch.mean(batch_loss)
+        loss = torch.mean(batch_losses)
+        info_items["train"] = loss.item()
+        info_items["sample"] = report.sample(scan=scan.cpu(), pred=pred.cpu(), segm=segm.cpu())
         # sample, debug_sample = wandb_sample_debug(scan=scan.cpu(), pred=pred.cpu(), segm=segm.cpu())
-        report.append({
-            "valid_loss": loss.item(),
-            "valid_jd": torch.mean(batch_jd).item(),
-            "valid_l1": torch.mean(batch_l1).item(),
-            # "sample": wandb_sample(scan=scan.cpu(), pred=pred.cpu(), segm=segm.cpu()),
-            "sample": wandb_sample_debug(scan=scan.cpu(), pred=pred.cpu(), segm=segm.cpu()),
-        })
+        report.append(info_items)
         return loss.item(), batch_losses_items
 
 

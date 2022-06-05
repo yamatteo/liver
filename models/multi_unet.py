@@ -5,6 +5,7 @@ from torch import nn, Tensor
 from torch.nn import Module, functional
 
 from functions.distances import jaccard_distance
+from tensors import ScanBatch, FloatSegmBatch
 
 
 def actv_layer(actv: str, **_) -> Module | None:
@@ -266,8 +267,8 @@ class UNet(Module):
             nn.Hardsigmoid()
         )
 
-    def forward(self, x: Tensor) -> Tensor:
-        return self.model(x)
+    def forward(self, x: ScanBatch) -> FloatSegmBatch:
+        return FloatSegmBatch(self.model(x))
 
     def loss(self, scan: Tensor, segm: Tensor):
         loss, _ = self.loss_forward(scan, segm)

@@ -8,6 +8,7 @@ import torch
 from rich.console import Console
 from torch import Tensor
 from torch.utils.data import Dataset
+from tensors import *
 
 console = Console()
 
@@ -119,17 +120,17 @@ class BufferDataset2(Dataset):
         k = self.keys[i]
         return k, self.buffer[k]
 
-    def train_batches(self):
+    def train_batches(self) -> Iterator[tuple[list, tuple[ScanBatch, FloatSegmBatch]]]:
         batch_keys = [self.keys[i:i + self.batch_size] for i in range(0, len(self.keys), self.batch_size)]
         for keys in batch_keys:
-            batch = torch.cat([self.buffer[k] for k in keys])
-            yield keys, (batch[:, 0:4], batch[:, 4:7])
+            batch = FloatBatchBundle.cat([self.buffer[k] for k in keys])
+            yield keys, batch.separate()
 
     def valid_batches(self):
         batch_keys = [self.valid_keys[i:i + self.batch_size] for i in range(0, len(self.valid_keys), self.batch_size)]
         for keys in batch_keys:
-            batch = torch.cat([self.valid_buffer[k] for k in keys])
-            yield keys, (batch[:, 0:4], batch[:, 4:7])
+            batch = FloatBatchBundle.cat([self.valid_buffer[k] for k in keys])
+            yield keys, batch.separate()
 
     def valid_iter(self):
         return self.valid_buffer.items()

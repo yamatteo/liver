@@ -43,8 +43,10 @@ class FloatBatchBundle(Tensor):
             f"FloatBatchBundle should be a (N, C, H, W, D) shaped vector, got {self.shape}."
         assert self.size(1) == 7, \
             f"Channels should be 7: four phases and three for one-hot ground-truth segmentation, got {self.shape}."
-        assert self.size(2) == self.size(3) == 512, \
-            f"Scans expected to be 512x512xD, got {self.shape}."
+
+    @classmethod
+    def cat(cls, inputs: list[FloatBatchBundle]) -> FloatBatchBundle:
+        return cls(torch.cat(inputs, dim=0))
 
     def separate(self) -> tuple["ScanBatch", "FloatSegmBatch"]:
         return ScanBatch(self[:, 0:4]), FloatSegmBatch(self[:, 4:7])
@@ -95,6 +97,23 @@ class FloatSegmBatch(Tensor):
         assert self.size(1) == 3, \
             f"Channels should be three for one-hot segmentation, got {self.shape}."
 
+    def distance_from(self, other: FloatSegmBatch) -> tuple[BatchDistance, dict]:
+        asyml1, asyml1_items = self.asyml1_df(other)
+        return asyml1, asyml1_items
+
+    def asyml1_df(self, other: FloatSegmBatch) -> tuple[BatchDistance, dict]:
+        channel_distances = torch.mean(
+            functional.relu(other - self),
+            dim=(2, 3, 4)
+        )
+        channel_weights = torch.tensor([[1, 5, 20]]).to(device=self.device)
+        items = {
+            "back": torch.mean(channel_distances[:, 0]).item(),
+            "livr": torch.mean(channel_distances[:, 1]).item(),
+            "tumr": torch.mean(channel_distances[:, 2]).item(),
+        }
+        return BatchDistance(torch.sum(channel_weights * channel_distances, dim=1)), items
+
 
 class IntSegmTensor(Tensor):
     @staticmethod
@@ -107,3 +126,14 @@ class IntSegmTensor(Tensor):
             f"ScanTensor should be a (N, C, H, W, D) shaped vector, got {self.shape}."
         assert self.size(1) == 3, \
             f"Channels should be three for one-hot segmentation, got {self.shape}."
+
+
+class BatchDistance(Tensor):
+    @staticmethod
+    def __new__(cls, x, *args, **kwargs):
+        return super().__new__(cls, x, *args, **kwargs).to(dtype=torch.float32)
+
+    def __init__(self, *args, **kwargs):
+        super(BatchDistance, self).__init__()
+        assert len(self.shape) == 1, \
+            f"BatchDistance should be a (N, ) shaped vector, got {self.shape}."

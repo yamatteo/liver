@@ -38,7 +38,7 @@ def get_color(scan: Tensor, pred: Tensor, segm: Tensor, mode: str = "none"):
     else:
         color = 0
     return torch.clamp(
-        get_white(scan) + color,
+        torch.as_tensor(get_white(scan)) + torch.as_tensor(color),
         0, 1
     )
 

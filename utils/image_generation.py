@@ -30,7 +30,7 @@ def get_color(scan: ScanBatch, pred: FloatSegmBatch, segm: FloatSegmBatch, *, n,
         color = pred.get_plane(n=n, klass=mode[5:], z=z)
     else:
         color = 0
-    return Plane(torch.clamp(get_white(scan) + color, 0, 1))
+    return Plane(torch.clamp(get_white(scan, n=n, z=z) + color, 0, 1))
 
 
 def rgb_sample(scan: ScanBatch, pred: FloatSegmBatch, segm: FloatSegmBatch, *, n, z: int | None = None, mode: tuple[str, str, str], format: str = "CHW"):

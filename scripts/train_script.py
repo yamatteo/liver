@@ -62,22 +62,25 @@ else:
     report.info(f"Model loaded from {models_path / model_name}")
 
 with report.status("Loading dataset..."):
+    model.eval()
     train_cases, valid_cases = [], []
     for i, case in enumerate(generators.cases(data_path, generators.criterion(bundle=True))):
         if i % 10 == 0:
             valid_cases.append(case)
-        else:
+        elif i % 5 == 1:
             train_cases.append(case)
-    dataset = BufferDataset(
-        generator=generators.cases_to_slices(train_cases, opts.slice_shape),
-        max_size=opts.buffer_size,
-        batch_size=opts.batch_size
-    )
-    valid_dataset = BufferDataset(
-        generator=generators.cases_to_slices(valid_cases, opts.slice_shape),
-        max_size=opts.buffer_size,
-        batch_size=opts.batch_size
-    )
+    with torch.no_grad():
+        dataset = BufferDataset.warmup(
+            generator=generators.cycle_enum_slices(train_cases, opts.slice_shape),
+            evaluator=lambda t: model.forward(t.separate()[0]).distance_from(t.separate()[1])[0].item(),
+            max_size=opts.buffer_size,
+            batch_size=opts.batch_size
+        )
+        valid_dataset = BufferDataset(
+            generator=generators.cycle_enum_slices(valid_cases, opts.slice_shape),
+            max_size=opts.buffer_size,
+            batch_size=opts.batch_size
+        )
 
 optimizer = AdaBelief(
     model.parameters(),

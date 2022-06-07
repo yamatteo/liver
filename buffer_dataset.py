@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import heapq
-import itertools
-from typing import Iterable, TypeVar
+from typing import TypeVar, Callable
 
 from rich.console import Console
 from torch.utils.data import Dataset
@@ -16,26 +15,25 @@ T = TypeVar('T')
 
 
 class BufferDataset(Dataset):
-    def __init__(self, generator: Iterator[T] | Iterable[T], *, max_size: int, batch_size: int | None,
+    def __init__(self, generator: Iterator[tuple[int, T]], *, max_size: int, batch_size: int | None,
                  turnover: float = 0.1):
         assert 0.0 < turnover < 1.0
-        cyclic_generator = itertools.cycle(enumerate(generator))
         buffer = {}
 
         while len(buffer) < max_size:
-            k, tensor = next(cyclic_generator)
+            k, item = next(generator)
             if k in buffer:
                 report.warn("Buffer is larger than population.")
                 self.proper = False
                 break
-            buffer[k] = tensor
+            buffer[k] = item
         else:
             self.proper = True
 
         self.batch_size = batch_size
         self.buffer = buffer
         self.buffer_size = len(buffer)
-        self.generator = cyclic_generator
+        self.generator = generator
         self.item_type = type(next(iter(buffer.values())))
         self.keys = list(buffer.keys())
         self.turnover = int(turnover * len(buffer))
@@ -63,8 +61,41 @@ class BufferDataset(Dataset):
             smallest = heapq.nsmallest(self.turnover, list(losses.keys()), lambda k: losses[k])
             for key in smallest:
                 del self.buffer[key]
-        self.buffer = {k: x for k, x in sorted(self.buffer.items(), key=lambda item: losses[item[0]])}
+        self.buffer = {k: x for k, x in sorted(self.buffer.items(), key=lambda item: -losses[item[0]])}
         while len(self.buffer) < self.buffer_size:
             k, x = next(self.generator)
             self.buffer[k] = x
         self.keys = list(self.buffer.keys())
+
+    @classmethod
+    def warmup(cls,
+               generator: Iterator[tuple[int, T]],
+               evaluator: Callable[[T], float], *,
+               max_size: int,
+               batch_size: int | None,
+               turnover: float = 0.1) -> BufferDataset:
+        self = cls.__new__(cls)
+        assert 0.0 < turnover < 1.0
+        buffer = {}
+        losses = {}
+
+        while True:
+            k, tensor = next(generator)
+            if k == 0 and len(buffer) > 0:
+                break
+            report.debug(f"Evaluating k={k}")
+            buffer[k] = tensor
+            losses[k] = evaluator(tensor)
+            if len(buffer) > max_size:
+                out = min(buffer.keys(), key=lambda k: losses[k])
+                del buffer[out]
+
+        self.batch_size = batch_size
+        self.buffer = buffer
+        self.buffer_size = len(buffer)
+        self.generator = generator
+        self.item_type = type(next(iter(buffer.values())))
+        self.keys = list(buffer.keys())
+        self.proper = (len(self.buffer) == max_size)
+        self.turnover = int(turnover * len(buffer))
+        return self

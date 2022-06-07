@@ -18,13 +18,16 @@ def cases(base_path: Path | str, accepted_dir: Callable[[Path], bool]) -> Iterat
     yield from _cases(base_path, accepted_dir=accepted_dir)
 
 
-def cases_to_slices(cases_list: Iterable, shape: tuple[int, int, int]) -> Iterator[FloatBatchBundle]:
-    for case in cases_list:
-        fbb = IntBundle(np.array(nibabel.load(
-            case / f"train_bundle.nii.gz"
-        ).dataobj, dtype=np.int16)).to_float_batch_bundle()
-        for t in fbb.slices(shape):
-            yield t
+def cycle_enum_slices(cases_list: Iterable, shape: tuple[int, int, int]) -> Iterator[tuple[int, FloatBatchBundle]]:
+    while True:
+        k = 0
+        for case in cases_list:
+            fbb = IntBundle(np.array(nibabel.load(
+                case / f"train_bundle.nii.gz"
+            ).dataobj, dtype=np.int16)).to_float_batch_bundle()
+            for t in fbb.slices(shape):
+                yield k, t
+                k += 1
 
 
 def train_bundles(base_path: Path | str) -> Iterator[FloatBatchBundle]:

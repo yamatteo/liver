@@ -26,7 +26,7 @@ def train_step(scan: ScanBatch, segm: FloatSegmBatch, *, model: UNet, optimizer:
     loss = torch.sum(batch_losses)
     loss.backward()
     optimizer.step()
-    info_items["train"] = loss.item()
+    info_items["train"] = loss.item() / len(batch_losses)
     report.append(info_items)
     return info_items["train"], batch_losses_items
 
@@ -40,7 +40,7 @@ def valid_step(scan: ScanBatch, segm: FloatSegmBatch, *, model: UNet, keys: list
         batch_losses_items = {k: batch_losses[i].item() for i, k in enumerate(keys)}
 
         loss = torch.sum(batch_losses)
-        info_items["train"] = loss.item()
+        info_items["train"] = loss.item() / len(batch_losses)
         info_items["sample"] = report.sample(scan=scan.cpu(), pred=pred.cpu(), segm=segm.cpu())
         # sample, debug_sample = wandb_sample_debug(scan=scan.cpu(), pred=pred.cpu(), segm=segm.cpu())
         report.append(info_items)

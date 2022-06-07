@@ -77,6 +77,7 @@ class BufferDataset(Dataset):
                 losses[key] = value
                 del self.buffer[k_min]
                 del losses[k_min]
+        self.keys = self.keys = list(self.buffer.keys())
 
     # @classmethod
     # def warmup(cls,

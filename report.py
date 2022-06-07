@@ -42,8 +42,8 @@ def __sample(scan: ScanBatch, pred: FloatSegmBatch, segm: FloatSegmBatch):
     n = random.randint(0, scan.size(0) - 1)
     z = random.randint(0, scan.size(4) - 1)
     image = get_white(scan, n=n, z=z).numpy()
-    liver_image = rgb_sample(scan, pred, segm, mode=("error", "background", "liver"), n=n, z=z, data_format="HWC")
-    tumor_image = rgb_sample(scan, pred, segm, mode=("error", "tumor", "background"), n=n, z=z, data_format="HWC")
+    liver_image = rgb_sample(scan, pred, segm, mode=("liver_error", "liver", "background"), n=n, z=z, data_format="HWC")
+    tumor_image = rgb_sample(scan, pred, segm, mode=("tumor_error", "tumor", "background"), n=n, z=z, data_format="HWC")
     class_labels = {
         0: "background",
         1: "liver",

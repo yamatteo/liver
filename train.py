@@ -84,7 +84,7 @@ def train_cycle(model, *,
                              f"Total loss: {epoch_loss:.2e}. "
                              f"Loss per scan: {epoch_loss / len(dataset):.2e}").ljust(50, ' ')
             )
-        dataset.replacement(losses)
+        # dataset.replacement(losses)
 
         model.eval()
         losses = {}
@@ -109,6 +109,6 @@ def train_cycle(model, *,
                 description=f"Validation Step."
                             f"Loss per scan: {epoch_loss / len(dataset):.2e}".ljust(50, ' ')
             )
-        validation_dataset.replacement(losses)
+        # validation_dataset.replacement(losses)
 
         torch.save(model.state_dict(), models_path / "last_checkpoint.pth")

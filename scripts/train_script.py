@@ -9,7 +9,7 @@ from adabelief_pytorch import AdaBelief
 
 import report
 # from dataset import BufferDataset2 as BufferDataset
-from buffer_dataset import BufferDataset
+from buffer_dataset import BufferDataset, split_datasets
 from models.multi_unet import UNet
 from train import train_cycle
 from utils import generators
@@ -62,40 +62,42 @@ else:
     report.info(f"Model loaded from {models_path / model_name}")
 
 with report.status("Loading dataset..."):
-    model.eval()
-    train_cases, valid_cases = [], []
-    for i, case in enumerate(generators.cases(data_path, generators.criterion(bundle=True))):
-        if i % 10 == 0:
-            valid_cases.append(case)
-        else:
-            train_cases.append(case)
+    dataset, valid_dataset = split_datasets(data_path=data_path,  shape=opts.slice_shape, batch_size=opts.batch_size)
+    # model.eval()
+    # train_cases, valid_cases = [], []
+    # for i, case in enumerate(generators.cases(data_path, generators.criterion(bundle=True))):
+    #     if i % 10 == 0:
+    #         valid_cases.append(case)
+    #     else:
+    #         train_cases.append(case)
+    #
+    # report.info("Populating training dataset.")
+    # dataset = BufferDataset(
+    #     generator=generators.cycle_enum_slices(train_cases, opts.slice_shape),
+    #     max_size=opts.buffer_size,
+    #     batch_size=opts.batch_size
+    # )
+    # report.info("Populating validation dataset.")
+    # valid_dataset = BufferDataset(
+    #     generator=generators.cycle_enum_slices(valid_cases, opts.slice_shape),
+    #     max_size=opts.buffer_size // opts.train_to_valid_ratio,
+    #     batch_size=opts.batch_size
+    # )
 
-    report.info("Populating training dataset.")
-    dataset = BufferDataset(
-        generator=generators.cycle_enum_slices(train_cases, opts.slice_shape),
-        max_size=opts.buffer_size,
-        batch_size=opts.batch_size
-    )
-    report.info("Populating validation dataset.")
-    valid_dataset = BufferDataset(
-        generator=generators.cycle_enum_slices(valid_cases, opts.slice_shape),
-        max_size=opts.buffer_size // opts.train_to_valid_ratio,
-        batch_size=opts.batch_size
-    )
-if opts.resume:
-    with torch.no_grad():
-        model.to(device=device)
-        def evaluate(fbb):
-            scan, segm = fbb.separate()
-            scan = scan.to(device=device, dtype=torch.float32)
-            segm = segm.to(device=device, dtype=torch.float32)
-            pred = model.forward(scan)
-            batch_losses, _ = pred.distance_from(segm)
-            return torch.sum(batch_losses).item()
-
-        with report.status("Warming up datasets..."):
-            dataset.warmup(evaluate)
-            valid_dataset.warmup(evaluate)
+# if opts.resume:
+#     with torch.no_grad():
+#         model.to(device=device)
+#         def evaluate(fbb):
+#             scan, segm = fbb.separate()
+#             scan = scan.to(device=device, dtype=torch.float32)
+#             segm = segm.to(device=device, dtype=torch.float32)
+#             pred = model.forward(scan)
+#             batch_losses, _ = pred.distance_from(segm)
+#             return torch.sum(batch_losses).item()
+#
+#         with report.status("Warming up datasets..."):
+#             dataset.warmup(evaluate)
+#             valid_dataset.warmup(evaluate)
 
 optimizer = AdaBelief(
     model.parameters(),

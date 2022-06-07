@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 import heapq
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import TypeVar, Callable
 
+import nibabel
+import numpy as np
 from rich.console import Console
 from torch.utils.data import Dataset
 
 import report
 from tensors import *
+from utils import generators
 
 console = Console()
 
@@ -111,3 +116,47 @@ class BufferDataset(Dataset):
     #     self.proper = (len(self.buffer) == max_size)
     #     self.turnover = int(turnover * len(buffer))
     #     return self
+
+
+class StoredDataset(Dataset):
+    def __init__(self, tempdir: TemporaryDirectory, batch_size: int):
+        self.tempdir = tempdir
+        self.files = list(Path(tempdir.name).iterdir())
+        self.batch_size = batch_size
+
+    def __len__(self):
+        return len(self.files)
+
+    def __getitem__(self, i: int):
+        path = self.files[i]
+        return FloatBatchBundle(np.array(nibabel.load(path).dataobj, dtype=np.float32))
+
+    def batches(self) -> Iterator[FloatBatchBundle]:
+        for i in range(0, len(self), self.batch_size):
+            yield FloatBatchBundle.batch([self[j] for j in range(i, min(i + self.batch_size, len(self)))])
+
+
+def split_datasets(*, data_path: Path, shape: tuple[int, int, int], batch_size: int) \
+        -> tuple[StoredDataset, StoredDataset]:
+    train_tempdir = TemporaryDirectory()
+    valid_tempdir = TemporaryDirectory()
+    k = 0
+    for i, case in enumerate(generators.cases(data_path, generators.criterion(bundle=True))):
+        fbb = IntBundle(np.array(nibabel.load(
+            case / f"train_bundle.nii.gz"
+        ).dataobj, dtype=np.int16)).to_float_batch_bundle()
+        for t in fbb.slices(shape):
+            nibabel.save(
+                nibabel.Nifti1Image(
+                    t.numpy(),
+                    affine=np.eye(4)
+                ),
+                Path((valid_tempdir if i % 10 == 0 else train_tempdir).name)
+                / f"{k}.nii.gz",
+            )
+            k += 1
+
+    return (
+        StoredDataset(tempdir=train_tempdir, batch_size=batch_size),
+        StoredDataset(tempdir=valid_tempdir, batch_size=batch_size),
+    )

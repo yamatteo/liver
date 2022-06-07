@@ -4,7 +4,6 @@ import torch
 from torch import nn, Tensor
 from torch.nn import Module, functional
 
-from functions.distances import jaccard_distance
 from tensors import ScanBatch, FloatSegmBatch
 
 
@@ -23,43 +22,28 @@ def actv_layer(actv: str, **_) -> Module | None:
 
 def norm_layer(norm: str, channels: int, momentum: float = 0.9, affine: bool = False) -> Module | None:
     """Return required normalization layer."""
-    if norm == "batch3d":
+    if norm == "batch":
         return nn.BatchNorm3d(num_features=channels, momentum=momentum, affine=affine)
-    if norm == "instance3d":
+    if norm == "instance":
         return nn.InstanceNorm3d(num_features=channels, momentum=momentum, affine=affine)
-    if norm == "batch2d":
-        return nn.BatchNorm2d(num_features=channels, momentum=momentum, affine=affine)
-    if norm == "instance2d":
-        return nn.InstanceNorm2d(num_features=channels, momentum=momentum, affine=affine)
     return None
 
 
 def drop_layer(drop: str, drop_prob: float = 0.5) -> Module | None:
     """Return required dropout layer."""
-    if drop == "drop2d":
-        return nn.Dropout2d(p=drop_prob, inplace=True)
-    if drop == "drop3d":
+    if drop == "drop":
         return nn.Dropout3d(p=drop_prob, inplace=True)
     return None
 
 
-def conv_layer(dims: str, in_channels: int, out_channels: int) -> Module:
+def conv_layer(in_channels: int, out_channels: int) -> Module:
     """Return required convolution layer."""
-    if dims == "2d":
-        layer = nn.Conv2d(
-            in_channels=in_channels,
-            out_channels=out_channels,
-            kernel_size=(3, 3),
-            padding=1,
-        )
-    else:
-        layer = nn.Conv3d(
-            in_channels=in_channels,
-            out_channels=out_channels,
-            kernel_size=(3, 3, 3),
-            padding=1,
-        )
-    return layer
+    return nn.Conv3d(
+        in_channels=in_channels,
+        out_channels=out_channels,
+        kernel_size=(3, 3, 3),
+        padding=1,
+    )
 
 
 def pool_layer(pool: str) -> Module | None:
@@ -76,11 +60,10 @@ def pool_layer(pool: str) -> Module | None:
 
 
 class Block(Module):
-    """Base convolution block for 2D/3D Unet."""
+    """Base convolution block for 3D Unet."""
 
     def __init__(
             self,
-            dims: str,
             in_channels: int,
             out_channels: int,
             complexity: int = 2,
@@ -89,32 +72,35 @@ class Block(Module):
             drop: str = "",
     ):
         super().__init__()
-        self.repr = f"Block(" \
-                    f"dims={dims}, " \
-                    f"in_channels={in_channels}, " \
-                    f"out_channels={out_channels}, " \
-                    f"complexity={complexity}, " \
-                    f"actv={actv!r}, " \
-                    f"norm={norm!r}, " \
-                    f"drop={drop!r}" \
+        self.rebuild = f"Block(" \
+                       f"in_channels={in_channels}, " \
+                       f"out_channels={out_channels}, " \
+                       f"complexity={complexity}, " \
+                       f"actv={actv!r}, " \
+                       f"norm={norm!r}, " \
+                       f"drop={drop!r}" \
+                       f")"
+
+        self.repr = f"Block({'>'.join([str(in_channels), *([str(out_channels)]*complexity)])}" \
+                    f"{'>'+actv if actv else ''}" \
+                    f"{'>'+norm if norm else ''}" \
+                    f"{'>'+drop if drop else ''}" \
                     f")"
 
         layers = [
                      conv_layer(
-                         dims=dims,
                          in_channels=in_channels,
                          out_channels=out_channels
                      ),
                  ] + [
                      actv_layer(actv=actv),
                      conv_layer(
-                         dims=dims,
                          in_channels=out_channels,
                          out_channels=out_channels
                      )
                  ] * complexity + [
-                     norm_layer(norm=norm + dims, channels=out_channels),
-                     drop_layer(drop=drop + dims)
+                     norm_layer(norm=norm, channels=out_channels),
+                     drop_layer(drop=drop)
                  ]
         self.model = nn.Sequential(*[lyr for lyr in layers if lyr is not None])
 
@@ -130,7 +116,6 @@ class Layer(Module):
 
     def __init__(
             self,
-            dims: str,
             channels: list[int],
             complexity: int = 2,
             down_activation: str = "leaky",
@@ -145,7 +130,6 @@ class Layer(Module):
     ):
         super().__init__()
         self.repr = f"Layer(" \
-                    f"dims={dims}, " \
                     f"channels={channels!r}, " \
                     f"complexity={complexity}, " \
                     f"down_activation={down_activation!r}, " \
@@ -159,7 +143,6 @@ class Layer(Module):
                     f"up_dropout={up_dropout!r}" \
                     f")"
         self.block = Block(
-            dims=dims,
             in_channels=channels[0],
             out_channels=channels[1],
             complexity=complexity,
@@ -168,9 +151,8 @@ class Layer(Module):
             drop=down_dropout if len(channels) > 2 else bottom_dropout,
         )
         if len(channels) > 2:
-            self.pool = pool_layer(pool="max22" if dims == "2d" else "max222")
+            self.pool = pool_layer("max222")
             self.submodule = Layer(
-                dims=dims,
                 channels=channels[1:],
                 complexity=complexity,
                 down_activation=down_activation,
@@ -185,7 +167,6 @@ class Layer(Module):
             )
             self.unpool = nn.Upsample(scale_factor=2, mode='nearest')
             self.upconv = Block(
-                dims=dims,
                 in_channels=channels[1] + channels[2],
                 out_channels=channels[1],
                 complexity=complexity,
@@ -194,8 +175,8 @@ class Layer(Module):
                 drop=up_dropout
             )
 
-    def __repr__(self):
-        return self.repr
+    # def __repr__(self):
+    #     return self.repr
 
     def forward(self, x: Tensor) -> Tensor:
         y = self.block(x)
@@ -213,7 +194,6 @@ class UNet(Module):
 
     def __init__(
             self,
-            dims: str,
             channels: list[int],
             final_classes: int = 3,
             complexity: int = 2,
@@ -229,7 +209,6 @@ class UNet(Module):
     ):
         super().__init__()
         self.repr = f"UNet(" \
-                    f"dims={dims}, " \
                     f"channels={channels!r}, " \
                     f"final_classes={final_classes}, " \
                     f"complexity={complexity}, " \
@@ -246,7 +225,6 @@ class UNet(Module):
 
         self.model = nn.Sequential(
             Layer(
-                dims=dims,
                 channels=channels,
                 complexity=complexity,
                 down_activation=down_activation,
@@ -269,23 +247,3 @@ class UNet(Module):
 
     def forward(self, x: ScanBatch) -> FloatSegmBatch:
         return FloatSegmBatch(self.model(x))
-
-    def loss(self, scan: Tensor, segm: Tensor):
-        loss, _ = self.loss_forward(scan, segm)
-        return loss
-
-    def loss_forward(self, scan: Tensor, segm: Tensor):
-        pred = self.forward(scan)
-        jaccard2 = jaccard_distance(
-            functional.softmax(pred, dim=1)[:, 1:, :, :, :],
-            functional.softmax(segm, dim=1)[:, 1:, :, :, :]
-        )
-        pixel = functional.l1_loss(
-            pred[:, :, :, :, :],
-            segm[:, :, :, :, :]
-        )
-        liver_weight = torch.sum(segm[:, 1])
-        tumor_weight = torch.sum(segm[:, 2])
-        liver_presence = liver_weight / (liver_weight + 1)
-        tumor_presence = tumor_weight / (tumor_weight + 1)
-        return (tumor_presence + liver_presence + 1) * pixel + jaccard2, pred

@@ -1,7 +1,4 @@
-import argparse
-import importlib
 import re
-import sys
 from contextlib import redirect_stderr
 from io import StringIO
 from pathlib import Path
@@ -11,8 +8,6 @@ from typing import Optional, Tuple
 import dicom2nifti
 import nibabel
 from rich.console import Console
-
-from utils.path_explorer import discover, get_criterion
 
 console = Console()
 
@@ -136,34 +131,3 @@ def process_dicomdir(source_path: Path, target_path: Path):
             f"{' ' * len(case_name)}  "
             f"Images saved in {target_path.absolute()}."
         )
-
-
-def get_args():
-    parser = argparse.ArgumentParser(description="Convert dicom to nifti.")
-    parser.add_argument("--defaults", nargs="?", default="options.py", type=Path, help="path to defaults module")
-    parser.add_argument("--outputs", type=Path, default=argparse.SUPPRESS)
-    parser.add_argument("--overwrite", action="store_true")
-    parser.add_argument("--sources", type=Path, default=argparse.SUPPRESS)
-
-    args = parser.parse_args()
-    defaults_path, defaults_module = args.defaults.parent, args.defaults.stem
-    sys.path.append(defaults_path)
-    defaults = importlib.import_module(defaults_module).defaults
-    return dict(defaults, **vars(args))
-
-
-if __name__ == "__main__":
-    opts = get_args()
-
-    console.print("[bold orange3]Converting dicom to nifti:[/bold orange3]")
-    for case_path in discover(opts["sources"], get_criterion(dicom=True)):
-        target_path = opts["outputs"] / case_path
-        target_path_is_complete = all(
-            (target_path / f"original_phase_{phase}.nii.gz").exists()
-            for phase in ["b", "a", "v", "t"]
-        )
-        if opts["overwrite"] or not target_path_is_complete:
-            target_path.mkdir(parents=True, exist_ok=True)
-            process_dicomdir(opts["sources"] / case_path, target_path)
-        else:
-            console.print(f"[bold black]{case_path.name}.[/bold black] is already complete, skipping.")

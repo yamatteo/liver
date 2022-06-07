@@ -1,15 +1,12 @@
 import os
-import sys
 from pathlib import Path
 
+import dotenv
 import nibabel
 import numpy as np
 import torch
-
-import dotenv
 from rich.console import Console
 
-sys.path.append(os.getcwd())
 from utils.path_explorer import discover, get_criterion
 
 

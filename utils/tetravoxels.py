@@ -6,7 +6,7 @@ import torch
 from torch.nn.functional import one_hot
 
 
-def build_tetravoxel(case: Path, segmentation = False):
+def build_tetravoxel(case: Path, segmentation=False):
     affine = nibabel.load(case / f"registered_phase_v.nii.gz").affine
     scan = torch.stack([
         torch.tensor(np.array(nibabel.load(

@@ -1,6 +1,6 @@
 import os
-import sys
-sys.path.append(os.getcwd())
+from pathlib import Path
+
 import dotenv
 from rich.console import Console
 
@@ -20,7 +20,7 @@ for case_path in discover(os.getenv("OUTPUTS"), get_criterion(original=True)):
     )
     if os.getenv("OVERWRITE") or not target_path_is_complete:
         target_path.mkdir(parents=True, exist_ok=True)
-        register_case(source_path, target_path, niftybin=os.getenv("NIFTY_BIN"))
+        register_case(source_path, target_path, niftybin=Path(os.getenv("NIFTY_BIN")))
 
     else:
         console.print(f"[bold black]{case_path.name}.[/bold black] is already complete, skipping.")

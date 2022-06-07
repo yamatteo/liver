@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-import argparse
 from pathlib import Path
 from typing import Callable
 
 from rich.console import Console
-
-from options import defaults
 
 console = Console()
 
@@ -59,11 +56,6 @@ def discover(path: Path | str, select_dir: Callable) -> list[Path]:
     return selected_paths
 
 
-def get_args():
-    parser = argparse.ArgumentParser()
-    return dict(defaults, **vars(parser.parse_args()))
-
-
 def criterion(
         bundle: bool = False,
         dicom: bool = False,
@@ -103,10 +95,3 @@ def criterion(
             return False
 
     return _criterion
-
-
-if __name__ == "__main__":
-    opts = get_args()
-    console.print(f"In the given path ({opts['sources']}) there are these dicom dirs:")
-    for path in discover(opts["sources"], get_criterion(dicom=True)):
-        console.print("  ", Path("...") / path)

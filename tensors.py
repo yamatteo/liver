@@ -26,17 +26,18 @@ class Tensor(TorchTensor):
         )
         if not correct_shape_len and correct_sizes:
             shape_error = (
-                f"{cls.__name__} should be a ("
-                + ', '.join([
-                    key if value is None else key + '=' + value
-                    for key, value in cls.fixed_shape.items()
-                ]) + f") shaped vector, got {tuple(shape)}."
+                    f"{cls.__name__} should be a ("
+                    + ', '.join([
+                        key if value is None else key + '=' + value
+                        for key, value in cls.fixed_shape.items()
+                    ]) + f") shaped vector, got {tuple(shape)}."
             )
             raise AssertionError(shape_error)
 
 
 class IntBundle(Tensor):
     fixed_shape = {"C": 5, "H": None, "W": None, "D": None}
+
     def to_float_batch_bundle(self) -> FloatBatchBundle:
         return FloatBatchBundle(torch.cat([
             self[0:4].float().unsqueeze(0),
@@ -51,7 +52,7 @@ class FloatBatchBundle(Tensor):
     fixed_shape = {"N": None, "C": 7, "H": None, "W": None, "D": None}
 
     @classmethod
-    def cat(cls, inputs: list[FloatBatchBundle]) -> FloatBatchBundle:
+    def batch(cls, inputs: list[FloatBatchBundle]) -> FloatBatchBundle:
         return cls(torch.cat(inputs, dim=0))
 
     def separate(self) -> tuple["ScanBatch", "FloatSegmBatch"]:
@@ -60,7 +61,7 @@ class FloatBatchBundle(Tensor):
     def dimensional_slices(self, thickness: int, dim: int) -> Iterator["FloatBatchBundle"]:
         """Iterate over slices of self along dimension `dim`.
 
-         Slices may overlap if `thicknes` does not divide `self.size(dim)` evenly.
+         Slices may overlap if `thickness` does not divide `self.size(dim)` evenly.
          If `self.size(dim)` is less than `thickness`, yields only `self`."""
         length = self.size(dim)
         if length <= thickness:
@@ -77,8 +78,10 @@ class FloatBatchBundle(Tensor):
             for w_slice in h_slice.dimensional_slices(shape[1], 3):
                 yield from w_slice.dimensional_slices(shape[2], 4)
 
+
 class Plane(Tensor):
     fixed_shape = {"H": None, "W": None}
+
 
 class ScanBatch(Tensor):
     fixed_shape = {"N": None, "C": 4, "H": None, "W": None, "D": None}
@@ -93,6 +96,7 @@ class ScanBatch(Tensor):
             }[phase]
             return Plane(self[n, phase, :, :, z])
 
+
 class FloatSegmBatch(Tensor):
     fixed_shape = {"N": None, "C": 3, "H": None, "W": None, "D": None}
 
@@ -106,12 +110,16 @@ class FloatSegmBatch(Tensor):
             return Plane(self[n, klass, :, :, z])
 
     def distance_from(self, other: FloatSegmBatch) -> tuple[BatchDistance, dict]:
+        items = {}
         asyml1, asyml1_items = self.asyml1_df(other)
-        return asyml1, asyml1_items
+        cross, cross_items = self.cross_entropy_df(other)
+        items.update(asyml1_items)
+        items.update(cross_items)
+        return cross, items
 
     def asyml1_df(self, other: FloatSegmBatch) -> tuple[BatchDistance, dict]:
         channel_distances = torch.mean(
-            functional.relu(other - self),
+            functional.relu(functional.softmax(other, dim=1) - functional.softmax(self, dim=1)),
             dim=(2, 3, 4)
         )
         channel_weights = torch.tensor([[1, 5, 20]]).to(device=self.device)
@@ -121,6 +129,16 @@ class FloatSegmBatch(Tensor):
             "tumr": torch.mean(channel_distances[:, 2]).item(),
         }
         return BatchDistance(torch.sum(channel_weights * channel_distances, dim=1)), items
+
+    def cross_entropy_df(self, other: FloatSegmBatch) -> tuple[BatchDistance, dict]:
+        batch_distances = BatchDistance(torch.mean(
+            functional.cross_entropy(self, target=other, reduction='none'),
+            dim=(1, 2, 3)
+        ))
+        items = {
+            "cros": torch.mean(batch_distances).item(),
+        }
+        return batch_distances, items
 
     def as_int(self) -> IntSegmBatch:
         return IntSegmBatch(torch.argmax(self, dim=1))
@@ -135,8 +153,3 @@ class IntSegmBatch(Tensor):
 
 class BatchDistance(Tensor):
     fixed_shape = {"N": None}
-
-    def __init__(self, *args, **kwargs):
-        super(BatchDistance, self).__init__()
-        assert len(self.shape) == 1, \
-            f"BatchDistance should be a (N, ) shaped vector, got {self.shape}."

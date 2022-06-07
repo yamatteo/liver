@@ -1,67 +1,87 @@
-import importlib
+import argparse
 import os
-import shutil
+from pathlib import Path
 
 import dotenv
 import torch
-
-import  report
-from train import train_cycle
-
-try:
-    wandb = importlib.import_module("wandb")
-except ImportError:
-    wandb = None
+import wandb
 from adabelief_pytorch import AdaBelief
-from pathlib import Path
-from rich.console import Console
-from torch.utils.tensorboard import SummaryWriter
 
-from dataset import BufferDataset2 as BufferDataset
+import report
+# from dataset import BufferDataset2 as BufferDataset
+from buffer_dataset import BufferDataset
 from models.multi_unet import UNet
-from utils.generators import train_slices
+from train import train_cycle
+from utils import generators
 
-# wandb.init(project="liver-tumor-detecton", entity="yamatteo")
-# wandb.config = {
-#   "learning_rate": 1e-4,
-#   "epochs": 10,
-#   "batch_size": 1
-# }
+run = report.init(project="liver-tumor-detecton", entity="yamatteo", backend="none", level="debug")
 
-console = Console()
-report.init(backend="none")
 dotenv.load_dotenv()
+report.debug("Loaded enviromental variables:", dict(dotenv.dotenv_values()))
+data_path = Path(os.getenv("OUTPUTS"))
+models_path = Path(os.getenv("SAVED_MODELS"))
 
-Path(os.getenv("SAVED_MODELS")).mkdir(exist_ok=True)
+opts = argparse.Namespace(
+    batch_size=4,
+    buffer_size=20,
+    epochs=400,
+    learning_rate=1e-5,
+    channels=[4, 32, 64, 128],
+    resume=False,
+    slice_shape=(16, 16, 8),
+    train_to_valid_odds=10,
+)
+wandb.config = vars(opts)  # Maybe these values are stored by wandb, maybe useful for hyperparameters search
+report.debug("Using config options:", vars(opts))
+
+# Ensure directory is present
+if not models_path.exists():
+    report.warn(f"Directory to load/save models does not exist. Making a new one at {models_path}.")
+    models_path.mkdir()
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-console.print(f"Running on {device}")
-writer_path = Path(os.getenv("TENSORBOARD"))
-data_path = Path(os.getenv("OUTPUTS"))
+report.info(f"Running on {device}")
+
 model = UNet(
-    dims="3d",
-    channels=[4, 32, 64, 128]
+    channels=opts.channels
 )
-try:
-    model.load_state_dict(torch.load(Path(os.getenv("SAVED_MODELS")) / "last_checkpoint.pth"))
-except FileNotFoundError:
-    pass
+report.debug("Model is:", model)
 
-slice_shape = (64, 64, 8)
+if opts.resume is False:
+    report.info("Starting with a new model.")
+elif opts.resume is True:
+    model_name = "last_checkpoint.pth"
+    try:
+        model.load_state_dict(torch.load(models_path / model_name))
+        report.info(f"Model loaded from {models_path / model_name}")
+    except FileNotFoundError:
+        report.info(f"Model {models_path / model_name} does not exist. Starting with a new model.")
+else:
+    model_name = opts.resume
+    model.load_state_dict(torch.load(models_path / model_name))
+    report.info(f"Model loaded from {models_path / model_name}")
 
-shutil.rmtree(Path(writer_path), ignore_errors=True)
-
-dataset = BufferDataset(
-    generator=train_slices(data_path, slice_shape),
-    buffer_size=64,
-    train_to_valid_odds=16,
-    valid_buffer_size=4,
-    batch_size=4,
-)
+with report.status("Loading dataset..."):
+    train_cases, valid_cases = [], []
+    for i, case in enumerate(generators.cases(data_path, generators.criterion(bundle=True))):
+        if i % 10 == 0:
+            valid_cases.append(case)
+        else:
+            train_cases.append(case)
+    dataset = BufferDataset(
+        generator=generators.cases_to_slices(train_cases, opts.slice_shape),
+        max_size=opts.buffer_size,
+        batch_size=opts.batch_size
+    )
+    valid_dataset = BufferDataset(
+        generator=generators.cases_to_slices(valid_cases, opts.slice_shape),
+        max_size=opts.buffer_size,
+        batch_size=opts.batch_size
+    )
 
 optimizer = AdaBelief(
     model.parameters(),
-    lr=1e-4,
+    lr=opts.learning_rate,
     eps=1e-8,
     betas=(0.9, 0.999),
     weight_decouple=False,
@@ -69,7 +89,14 @@ optimizer = AdaBelief(
     print_change_log=False,
 )
 
-# writer = SummaryWriter(str(writer_path))
-epochs = 100
-
-train_cycle(model, epochs=epochs, dataset=dataset, optimizer=optimizer, device=device, train_drop=5)
+try:
+    train_cycle(model,
+                epochs=opts.epochs,
+                dataset=dataset,
+                validation_dataset=valid_dataset,
+                optimizer=optimizer,
+                device=device,
+                models_path=models_path)
+except Exception as err:
+    run.finish()
+    raise err

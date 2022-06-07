@@ -27,9 +27,9 @@ opts = argparse.Namespace(
     epochs=400,
     learning_rate=1e-5,
     channels=[4, 32, 64, 128],
-    resume=False,
+    resume=True,
     slice_shape=(16, 16, 8),
-    train_to_valid_odds=10,
+    train_to_valid_ratio=10,
 )
 wandb.config = vars(opts)  # Maybe these values are stored by wandb, maybe useful for hyperparameters search
 report.debug("Using config options:", vars(opts))
@@ -67,20 +67,35 @@ with report.status("Loading dataset..."):
     for i, case in enumerate(generators.cases(data_path, generators.criterion(bundle=True))):
         if i % 10 == 0:
             valid_cases.append(case)
-        elif i % 5 == 1:
+        else:
             train_cases.append(case)
+
+    report.info("Populating training dataset.")
+    dataset = BufferDataset(
+        generator=generators.cycle_enum_slices(train_cases, opts.slice_shape),
+        max_size=opts.buffer_size,
+        batch_size=opts.batch_size
+    )
+    report.info("Populating validation dataset.")
+    valid_dataset = BufferDataset(
+        generator=generators.cycle_enum_slices(valid_cases, opts.slice_shape),
+        max_size=opts.buffer_size // opts.train_to_valid_ratio,
+        batch_size=opts.batch_size
+    )
+if opts.resume:
     with torch.no_grad():
-        dataset = BufferDataset.warmup(
-            generator=generators.cycle_enum_slices(train_cases, opts.slice_shape),
-            evaluator=lambda t: model.forward(t.separate()[0]).distance_from(t.separate()[1])[0].item(),
-            max_size=opts.buffer_size,
-            batch_size=opts.batch_size
-        )
-        valid_dataset = BufferDataset(
-            generator=generators.cycle_enum_slices(valid_cases, opts.slice_shape),
-            max_size=opts.buffer_size,
-            batch_size=opts.batch_size
-        )
+        model.to(device=device)
+        def evaluate(fbb):
+            scan, segm = fbb.separate()
+            scan = scan.to(device=device, dtype=torch.float32)
+            segm = segm.to(device=device, dtype=torch.float32)
+            pred = model.forward(scan)
+            batch_losses, _ = pred.distance_from(segm)
+            return torch.sum(batch_losses).item()
+
+        with report.status("Warming up datasets..."):
+            dataset.warmup(evaluate)
+            valid_dataset.warmup(evaluate)
 
 optimizer = AdaBelief(
     model.parameters(),

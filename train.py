@@ -64,7 +64,7 @@ def train_cycle(model, *,
                 f"Epoch {epoch + 1}/{epochs}. Loss so far: {epoch_loss:.2e}".ljust(50, ' '),
                 total=len(dataset)
             )
-            for keys, scan_segm in dataset.iter():
+            for keys, scan_segm in dataset.batches():
                 scan, segm = scan_segm.separate()
                 scan = scan.to(device=device, dtype=torch.float32)
                 segm = segm.to(device=device, dtype=torch.float32)
@@ -91,7 +91,7 @@ def train_cycle(model, *,
         with Progress(transient=True) as progress:
             task = progress.add_task(f"Validation Step.".ljust(50, ' '), total=len(validation_dataset))
             with torch.no_grad():
-                for keys, scan_segm in validation_dataset.iter():
+                for keys, scan_segm in validation_dataset.batches():
                     scan, segm = scan_segm.separate()
                     scan = scan.to(device=device, dtype=torch.float32)
                     segm = segm.to(device=device, dtype=torch.float32)

@@ -15,7 +15,7 @@ T = TypeVar('T')
 
 
 class BufferDataset(Dataset):
-    def __init__(self, generator: Iterator[tuple[int, T]], *, max_size: int, batch_size: int | None,
+    def __init__(self, generator: Iterator[tuple[int, T]], *, max_size: int, batch_size: int,
                  turnover: float = 0.1):
         assert 0.0 < turnover < 1.0
         buffer = {}
@@ -50,12 +50,6 @@ class BufferDataset(Dataset):
         for keys in batch_keys:
             yield keys, self.item_type.batch([self.buffer[k] for k in keys])
 
-    def iter(self) -> Iterator[tuple[int | list[int], T]]:
-        if self.batch_size is None:
-            return iter(self.buffer.items())
-        else:
-            return self.batches()
-
     def replacement(self, losses: dict[int, float]):
         if self.proper:
             smallest = heapq.nsmallest(self.turnover, list(losses.keys()), lambda k: losses[k])
@@ -67,35 +61,52 @@ class BufferDataset(Dataset):
             self.buffer[k] = x
         self.keys = list(self.buffer.keys())
 
-    @classmethod
-    def warmup(cls,
-               generator: Iterator[tuple[int, T]],
-               evaluator: Callable[[T], float], *,
-               max_size: int,
-               batch_size: int | None,
-               turnover: float = 0.1) -> BufferDataset:
-        self = cls.__new__(cls)
-        assert 0.0 < turnover < 1.0
-        buffer = {}
+    def warmup(self, eval: Callable[[T], float]):
         losses = {}
-
+        key = None
+        for key, item in self.buffer.items():
+            losses[key] = eval(item)
         while True:
-            k, tensor = next(generator)
-            if k == 0 and len(buffer) > 0:
+            if key == 0:
                 break
-            report.debug(f"Evaluating k={k}")
-            buffer[k] = tensor
-            losses[k] = evaluator(tensor)
-            if len(buffer) > max_size:
-                out = min(buffer.keys(), key=lambda k: losses[k])
-                del buffer[out]
+            k_min, v_min = min(losses.items(), key=lambda kv: kv[1])
+            key, item = next(self.generator)
+            value = eval(item)
+            if value > v_min:
+                self.buffer[key] = item
+                losses[key] = value
+                del self.buffer[k_min]
+                del losses[k_min]
 
-        self.batch_size = batch_size
-        self.buffer = buffer
-        self.buffer_size = len(buffer)
-        self.generator = generator
-        self.item_type = type(next(iter(buffer.values())))
-        self.keys = list(buffer.keys())
-        self.proper = (len(self.buffer) == max_size)
-        self.turnover = int(turnover * len(buffer))
-        return self
+    # @classmethod
+    # def warmup(cls,
+    #            generator: Iterator[tuple[int, T]],
+    #            evaluator: Callable[[T], float], *,
+    #            max_size: int,
+    #            batch_size: int | None,
+    #            turnover: float = 0.1) -> BufferDataset:
+    #     self = cls.__new__(cls)
+    #     assert 0.0 < turnover < 1.0
+    #     buffer = {}
+    #     losses = {}
+    #
+    #     while True:
+    #         k, tensor = next(generator)
+    #         if k == 0 and len(buffer) > 0:
+    #             break
+    #         report.debug(f"Evaluating k={k}")
+    #         buffer[k] = tensor
+    #         losses[k] = evaluator(tensor)
+    #         if len(buffer) > max_size:
+    #             out = min(buffer.keys(), key=lambda k: losses[k])
+    #             del buffer[out]
+    #
+    #     self.batch_size = batch_size
+    #     self.buffer = buffer
+    #     self.buffer_size = len(buffer)
+    #     self.generator = generator
+    #     self.item_type = type(next(iter(buffer.values())))
+    #     self.keys = list(buffer.keys())
+    #     self.proper = (len(self.buffer) == max_size)
+    #     self.turnover = int(turnover * len(buffer))
+    #     return self

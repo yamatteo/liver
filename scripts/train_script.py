@@ -6,10 +6,11 @@ import dotenv
 import torch
 import wandb
 from adabelief_pytorch import AdaBelief
+from torch.utils.data import DataLoader
 
 import report
 # from dataset import BufferDataset2 as BufferDataset
-from buffer_dataset import BufferDataset
+from buffer_dataset import BufferDataset, split_datasets
 from models.multi_unet import UNet
 from train import train_cycle
 from utils import generators
@@ -62,40 +63,13 @@ else:
     report.info(f"Model loaded from {models_path / model_name}")
 
 with report.status("Loading dataset..."):
-    model.eval()
-    train_cases, valid_cases = [], []
-    for i, case in enumerate(generators.cases(data_path, generators.criterion(bundle=True))):
-        if i % 10 == 0:
-            valid_cases.append(case)
-        else:
-            train_cases.append(case)
-
-    report.info("Populating training dataset.")
-    dataset = BufferDataset(
-        generator=generators.cycle_enum_slices(train_cases, opts.slice_shape),
-        max_size=opts.buffer_size,
-        batch_size=opts.batch_size
+    train_dataset, valid_dataset = split_datasets(
+        data_path=data_path,
+        shape=opts.slice_scape,
+        max_size=(opts.buffer_size, opts.buffer_size // opts.train_to_valid_ratio)
     )
-    report.info("Populating validation dataset.")
-    valid_dataset = BufferDataset(
-        generator=generators.cycle_enum_slices(valid_cases, opts.slice_shape),
-        max_size=opts.buffer_size // opts.train_to_valid_ratio,
-        batch_size=opts.batch_size
-    )
-if opts.resume:
-    with torch.no_grad():
-        model.to(device=device)
-        def evaluate(fbb):
-            scan, segm = fbb.separate()
-            scan = scan.to(device=device, dtype=torch.float32)
-            segm = segm.to(device=device, dtype=torch.float32)
-            pred = model.forward(scan)
-            batch_losses, _ = pred.distance_from(segm)
-            return torch.sum(batch_losses).item()
-
-        with report.status("Warming up datasets..."):
-            dataset.warmup(evaluate)
-            valid_dataset.warmup(evaluate)
+    train_dataloader = DataLoader(train_dataset, batch_size=opts.batch_size, pin_memory=True)
+    valid_dataloader = DataLoader(valid_dataset, batch_size=opts.batch_size, pin_memory=True)
 
 optimizer = AdaBelief(
     model.parameters(),
@@ -110,8 +84,10 @@ optimizer = AdaBelief(
 try:
     train_cycle(model,
                 epochs=opts.epochs,
-                dataset=dataset,
-                validation_dataset=valid_dataset,
+                # dataset=train_dataset,
+                # validation_dataset=valid_dataset,
+                train_dataloader=train_dataloader,
+                valid_dataloader=valid_dataloader,
                 optimizer=optimizer,
                 device=device,
                 models_path=models_path)

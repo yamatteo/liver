@@ -1,17 +1,58 @@
 from __future__ import annotations
 
 import heapq
+import itertools
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import TypeVar, Callable
 
+import nibabel
+import numpy as np
 from rich.console import Console
 from torch.utils.data import Dataset
 
 import report
 from tensors import *
+from utils import generators
 
 console = Console()
 
 T = TypeVar('T')
+
+
+class PreBufferDataset(Dataset):
+    def __init__(self, tmpdir: TemporaryDirectory, *, max_size: int, turnover: float = 0.1):
+        f_list = list(Path(tmpdir.name).iterdir())
+
+        self.buffer = {}
+        self.buffer_size = min(max_size, len(f_list))
+        self.gen = itertools.cycle(map(str, f_list))
+        self.keys = []
+        self.losses = {}
+        self.turnover = min(int(max_size * turnover), max(0, len(f_list) - max_size))
+
+        self.refill()
+
+    def __getitem__(self, i: int):
+        return self.buffer[self.keys[i]].detach()
+
+    def __len__(self):
+        return len(self.buffer)
+
+    def refill(self):
+        for _ in range(self.buffer_size):
+            if len(self) >= self.buffer_size:
+                break
+            path = next(self.gen)
+            self.buffer[path] = FloatBatchBundle(np.array(nibabel.load(path).dataobj, dtype=np.float32))
+        self.keys = list(self.buffer.keys())
+
+    def update(self, losses: list[float]):
+        self.losses.update({path: loss for path, loss in zip(self.buffer, losses)})
+        smallest = heapq.nsmallest(self.turnover, self.keys, lambda k: losses[k])
+        for key in smallest:
+            del self.buffer[key]
+        self.refill()
 
 
 class BufferDataset(Dataset):
@@ -111,3 +152,52 @@ class BufferDataset(Dataset):
     #     self.proper = (len(self.buffer) == max_size)
     #     self.turnover = int(turnover * len(buffer))
     #     return self
+
+
+class StoredDataset(Dataset):
+    def __init__(self, tempdir: TemporaryDirectory, batch_size: int):
+        self.tempdir = tempdir
+        self.files = list(Path(tempdir.name).iterdir())
+        self.batch_size = batch_size
+
+    def __len__(self):
+        return len(self.files)
+
+    def __getitem__(self, i: int):
+        path = self.files[i]
+        return FloatBatchBundle(np.array(nibabel.load(path).dataobj, dtype=np.float32))
+
+    def batches(self) -> Iterator[FloatBatchBundle]:
+        for i in range(0, len(self), self.batch_size):
+            yield FloatBatchBundle.batch([self[j] for j in range(i, min(i + self.batch_size, len(self)))])
+
+
+def split_datasets(*, data_path: Path, shape: tuple[int, int, int], max_size: int | tuple[int, int], turnover: float = 0.1) \
+        -> tuple[PreBufferDataset, PreBufferDataset]:
+    train_tempdir = TemporaryDirectory()
+    valid_tempdir = TemporaryDirectory()
+    k = 0
+    for i, case in enumerate(generators.cases(data_path, generators.criterion(bundle=True))):
+        fbb = IntBundle(np.array(nibabel.load(
+            case / f"train_bundle.nii.gz"
+        ).dataobj, dtype=np.int16)).to_float_batch_bundle()
+        for t in fbb.slices(shape):
+            nibabel.save(
+                nibabel.Nifti1Image(
+                    t.numpy(),
+                    affine=np.eye(4)
+                ),
+                Path((valid_tempdir if i % 10 == 0 else train_tempdir).name)
+                / f"{k}.nii.gz",
+            )
+            k += 1
+
+    if isinstance(max_size, int):
+        train_max_size = valid_max_size = max_size
+    else:
+        train_max_size, valid_max_size = max_size
+
+    return (
+        PreBufferDataset(tmpdir=train_tempdir, max_size=train_max_size, turnover=turnover),
+        PreBufferDataset(tmpdir=valid_tempdir, max_size=valid_max_size, turnover=turnover),
+    )

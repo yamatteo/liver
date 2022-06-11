@@ -17,6 +17,10 @@ def get_color(scan: ScanBatch, pred: FloatSegmBatch, segm: FloatSegmBatch, *, n,
     if mode == "error":
         # color = torch.sum(torch.abs(segm - pred), dim=1, keepdim=True)
         color = Plane(torch.sum(torch.abs(segm - pred), dim=1, keepdim=True)[n, 0, :, :, z])
+    elif mode == "liver_error":
+        color = Plane(torch.abs(segm - pred)[n, 1, :, :, z])
+    elif mode == "tumor_error":
+        color = Plane(torch.abs(segm - pred)[n, 2, :, :, z])
     elif mode in ("backg", "liver", "tumor"):
         color = segm.get_plane(n=n, klass=mode, z=z)
     elif mode in ("pred_backg", "pred_liver", "pred_tumor"):

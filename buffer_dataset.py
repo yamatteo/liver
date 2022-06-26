@@ -133,6 +133,12 @@ class StoredDataset(Dataset):
         ds.files = [f for i, f in enumerate(self.files) if i in keys]
         return ds
 
+    def batches(self, size: int):
+        for i in range(0, len(self.files), size):
+            keys = list(range(i, i+size))
+            batch = FloatBatchBundle(torch.stack([self[j] for j in keys]))
+            yield keys, batch
+
 
 def update_datasets(*, data_path: Path, output_path: Path, shape: tuple[int, int, int]):
     train_dir = output_path / "train"

@@ -128,6 +128,11 @@ class StoredDataset(Dataset):
         path = self.files[i]
         return FloatBundle(np.array(nibabel.load(path).dataobj, dtype=np.float32))
 
+    def subset(self, keys: list[int]):
+        ds = StoredDataset.__new__(StoredDataset)
+        ds.files = [f for i, f in enumerate(self.files) if i in keys]
+        return ds
+
 
 def update_datasets(*, data_path: Path, output_path: Path, shape: tuple[int, int, int]):
     train_dir = output_path / "train"
@@ -149,6 +154,11 @@ def update_datasets(*, data_path: Path, output_path: Path, shape: tuple[int, int
             )
             k += 1
 
+def get_datasets(path: Path):
+    return (
+        StoredDataset(path/"train"),
+        StoredDataset(path/"valid")
+    )
 
 def get_loaders(path: Path, batch_size: int):
     return (

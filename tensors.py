@@ -35,7 +35,7 @@ class Tensor(TorchTensor):
             raise AssertionError(shape_error)
 
     def get_dim(self, name: str) -> int:
-        return list(self).index(name)
+        return list(self.fixed_shape).index(name)
 
 
 class IntBundle(Tensor):

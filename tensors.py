@@ -70,7 +70,7 @@ class FloatBundle(Tensor):
         return cls(torch.cat(inputs, dim=0))
 
     def separate(self) -> tuple[Scan, FloatSegm]:
-        return Scan(self[:, 0:4]), FloatSegm(self[:, 4:7])
+        return Scan(self[0:4]), FloatSegm(self[4:7])
 
     def dimensional_slices(self, thickness: int, dim: int) -> Iterator["FloatBundle"]:
         """Iterate over slices of self along dimension `dim`.

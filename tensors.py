@@ -34,6 +34,9 @@ class Tensor(TorchTensor):
             )
             raise AssertionError(shape_error)
 
+    def get_dim(self, name: str) -> int:
+        return list(self).index(name)
+
 
 class IntBundle(Tensor):
     fixed_shape = {"C": 5, "H": None, "W": None, "D": None}
@@ -83,9 +86,9 @@ class FloatBundle(Tensor):
 
     def slices(self, shape: tuple[int, int, int]) -> Iterator["FloatBundle"]:
         """Iterate over FloatBatchBundle slices of given shape. Possibly overlapping."""
-        for h_slice in self.dimensional_slices(shape[0], 2):
-            for w_slice in h_slice.dimensional_slices(shape[1], 3):
-                yield from w_slice.dimensional_slices(shape[2], 4)
+        for h_slice in self.dimensional_slices(shape[0], self.get_dim("H")):
+            for w_slice in h_slice.dimensional_slices(shape[1], self.get_dim("W")):
+                yield from w_slice.dimensional_slices(shape[2], self.get_dim("D"))
 
 
 class FloatBatchBundle(Tensor):

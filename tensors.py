@@ -42,6 +42,8 @@ class IntBundle(Tensor):
         return FloatBatchBundle(torch.cat([
             self[0:4].float().unsqueeze(0),
             functional.one_hot(
+                # clamp because sometimes handwritten segmentation have indices higher than 2
+                # we assume them to be tumors with index 2
                 torch.clamp(self[4].long(), 0, 2),
                 3
             ).permute(3, 0, 1, 2).unsqueeze(0).float()

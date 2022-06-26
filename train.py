@@ -7,7 +7,7 @@ from rich.progress import Progress
 from torch.optim import Optimizer
 
 import report
-from buffer_dataset import BufferDataset
+from buffer_dataset import BufferDataset, StoredDataset
 # from dataset import BufferDataset2 as BufferDataset
 from models.multi_unet import UNet
 from tensors import *
@@ -15,7 +15,7 @@ from tensors import *
 console = Console()
 
 
-def train_step(scan: ScanBatch, segm: FloatSegmBatch, *, model: UNet, optimizer: Optimizer, keys: list[int]) \
+def train_batch_step(scan: ScanBatch, segm: FloatSegmBatch, *, model: UNet, optimizer: Optimizer, keys: list[int]) \
         -> tuple[float, dict[int, float]]:
     model.train()
     optimizer.zero_grad(set_to_none=True)
@@ -31,7 +31,7 @@ def train_step(scan: ScanBatch, segm: FloatSegmBatch, *, model: UNet, optimizer:
     return info_items["train"], batch_losses_items
 
 
-def valid_step(scan: ScanBatch, segm: FloatSegmBatch, *, model: UNet, keys: list[int])\
+def valid_step(scan: ScanBatch, segm: FloatSegmBatch, *, model: UNet, keys: list[int]) \
         -> tuple[float, dict[int, float]]:
     model.eval()
     with torch.no_grad():
@@ -45,6 +45,52 @@ def valid_step(scan: ScanBatch, segm: FloatSegmBatch, *, model: UNet, keys: list
         # sample, debug_sample = wandb_sample_debug(scan=scan.cpu(), pred=pred.cpu(), segm=segm.cpu())
         report.append(info_items)
         return loss.item(), batch_losses_items
+
+
+def whole_cycle(
+        model, *,
+        epochs: int,
+        dataset: StoredDataset,
+        optimizer: Optimizer,
+        device: torch.device
+):
+    model.to(device=device, dtype=torch.float32)
+    for epoch in range(epochs):
+        model.train()
+        epoch_loss = 0
+        losses = {}
+        with Progress(transient=True) as progress:
+            task = progress.add_task(
+                f"Epoch {epoch + 1}/{epochs}. Loss so far: {epoch_loss:.2e}".ljust(50, ' '),
+                total=len(dataset)
+            )
+            for key, scan_segm in enumerate(dataset):
+                scan, segm = scan_segm.separate()
+                scan = scan.to(device=device, dtype=torch.float32)
+                segm = segm.to(device=device, dtype=torch.float32)
+
+                loss, batch_losses = train_batch_step(
+                    ScanBatch(scan.unsqueeze(0)),
+                    FloatSegmBatch(segm.unsqueeze(0)),
+                    model=model,
+                    optimizer=optimizer,
+                    keys=[key]
+                )
+
+                epoch_loss += loss
+                losses.update(batch_losses)
+                progress.update(
+                    task,
+                    advance=1,
+                    description=f"Epoch {epoch + 1}/{epochs}. Loss so far: {epoch_loss:.2e}".ljust(50, ' ')
+                )
+            progress.update(
+                task,
+                description=(f"Epoch {epoch}/{epochs}. "
+                             f"Total loss: {epoch_loss:.2e}. "
+                             f"Loss per scan: {epoch_loss / len(dataset):.2e}").ljust(50, ' ')
+            )
+    return losses
 
 
 def train_cycle(model, *,

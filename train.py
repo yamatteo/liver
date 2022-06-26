@@ -225,8 +225,8 @@ def train_cycle(model, *,
                                  f"Training total loss: {epoch_loss:.2e}. "
                                  f"Loss per scan: {epoch_loss / len(train_dataset):.2e}").ljust(50, ' ')
                 )
-            smallest = heapq.nsmallest(buffer_size, list(losses.keys()), lambda k: losses[k])
-            sub_dataset = train_dataset.subset(smallest)
+            largest = heapq.nlargest(buffer_size, list(losses.keys()), lambda k: losses[k])
+            sub_dataset = train_dataset.subset(largest)
             dataloader = DataLoader(
                 sub_dataset,
                 pin_memory=True,

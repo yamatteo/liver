@@ -135,7 +135,7 @@ class StoredDataset(Dataset):
 
     def batches(self, size: int):
         for i in range(0, len(self.files), size):
-            keys = list(range(i, i+size))
+            keys = list(range(i, min(len(self.files), i+size)))
             batch = FloatBatchBundle(torch.stack([self[j] for j in keys]))
             yield keys, batch
 

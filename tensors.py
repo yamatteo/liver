@@ -42,7 +42,7 @@ class IntBundle(Tensor):
         return FloatBatchBundle(torch.cat([
             self[0:4].float().unsqueeze(0),
             functional.one_hot(
-                self[4].long(),
+                torch.clamp(self[4].long(), 0, 2),
                 3
             ).permute(3, 0, 1, 2).unsqueeze(0).float()
         ], dim=1))

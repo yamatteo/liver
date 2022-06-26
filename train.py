@@ -159,7 +159,12 @@ def train_cycle(model, *,
             )
             smallest = heapq.nsmallest(buffer_size, list(losses.keys()), lambda k: losses[k])
             sub_dataset = train_dataset.subset(smallest)
-            dataloader = DataLoader(sub_dataset, pin_memory=True, batch_size=batch_size)
+            dataloader = DataLoader(
+                sub_dataset,
+                pin_memory=True,
+                batch_size=batch_size,
+                collate_fn=lambda l: FloatBatchBundle(torch.stack(l))
+            )
         else:
             model.train()
             epoch_loss = 0

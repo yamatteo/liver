@@ -47,6 +47,46 @@ class IntBundle(Tensor):
             ).permute(3, 0, 1, 2).unsqueeze(0).float()
         ], dim=1))
 
+    def to_float_bundle(self) -> FloatBundle:
+        return FloatBundle(torch.cat([
+            self[0:4].float(),
+            functional.one_hot(
+                self[4].long(),
+                3
+            ).permute(3, 0, 1, 2).float()
+        ], dim=0))
+
+
+class FloatBundle(Tensor):
+    fixed_shape = {"C": 7, "H": None, "W": None, "D": None}
+
+    @classmethod
+    def batch(cls, inputs: list[FloatBundle]) -> FloatBundle:
+        return cls(torch.cat(inputs, dim=0))
+
+    def separate(self) -> tuple[Scan, FloatSegm]:
+        return Scan(self[:, 0:4]), FloatSegm(self[:, 4:7])
+
+    def dimensional_slices(self, thickness: int, dim: int) -> Iterator["FloatBundle"]:
+        """Iterate over slices of self along dimension `dim`.
+
+         Slices may overlap if `thickness` does not divide `self.size(dim)` evenly.
+         If `self.size(dim)` is less than `thickness`, yields only `self`."""
+        length = self.size(dim)
+        if length <= thickness:
+            yield self
+            return
+        num_slices = math.ceil(length / thickness)
+        for j in range(num_slices):
+            i = int(j * (length - thickness) / (num_slices - 1))
+            yield torch.narrow(self, dim, i, thickness)
+
+    def slices(self, shape: tuple[int, int, int]) -> Iterator["FloatBundle"]:
+        """Iterate over FloatBatchBundle slices of given shape. Possibly overlapping."""
+        for h_slice in self.dimensional_slices(shape[0], 2):
+            for w_slice in h_slice.dimensional_slices(shape[1], 3):
+                yield from w_slice.dimensional_slices(shape[2], 4)
+
 
 class FloatBatchBundle(Tensor):
     fixed_shape = {"N": None, "C": 7, "H": None, "W": None, "D": None}
@@ -83,6 +123,20 @@ class Plane(Tensor):
     fixed_shape = {"H": None, "W": None}
 
 
+class Scan(Tensor):
+    fixed_shape = {"C": 4, "H": None, "W": None, "D": None}
+
+    def get_plane(self, *, phase: int | str, z: int) -> Plane:
+        if isinstance(phase, str):
+            phase = {
+                "b": 0,
+                "a": 1,
+                "v": 2,
+                "t": 3
+            }[phase]
+            return Plane(self[phase, :, :, z])
+
+
 class ScanBatch(Tensor):
     fixed_shape = {"N": None, "C": 4, "H": None, "W": None, "D": None}
 
@@ -95,6 +149,22 @@ class ScanBatch(Tensor):
                 "t": 3
             }[phase]
             return Plane(self[n, phase, :, :, z])
+
+
+class FloatSegm(Tensor):
+    fixed_shape = {"C": 3, "H": None, "W": None, "D": None}
+
+    def get_plane(self, *, klass: int | str, z: int) -> Plane:
+        if isinstance(klass, str):
+            klass = {
+                "backg": 0,
+                "liver": 1,
+                "tumor": 2,
+            }[klass]
+            return Plane(self[klass, :, :, z])
+
+    def as_int(self) -> IntSegm:
+        return IntSegm(torch.argmax(self, dim=0))
 
 
 class FloatSegmBatch(Tensor):
@@ -142,6 +212,13 @@ class FloatSegmBatch(Tensor):
 
     def as_int(self) -> IntSegmBatch:
         return IntSegmBatch(torch.argmax(self, dim=1))
+
+
+class IntSegm(Tensor):
+    fixed_shape = {"H": None, "W": None, "D": None}
+
+    def get_plane(self, *, z: int) -> Plane:
+        return Plane(self[:, :, z])
 
 
 class IntSegmBatch(Tensor):

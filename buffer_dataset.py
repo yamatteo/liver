@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import heapq
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from typing import TypeVar, Callable
 
 import nibabel
 import numpy as np
 from rich.console import Console
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader
 
 import report
 from tensors import *
@@ -119,44 +118,40 @@ class BufferDataset(Dataset):
 
 
 class StoredDataset(Dataset):
-    def __init__(self, tempdir: TemporaryDirectory, batch_size: int):
-        self.tempdir = tempdir
-        self.files = list(Path(tempdir.name).iterdir())
-        self.batch_size = batch_size
+    def __init__(self, path: Path):
+        self.files = list(path.iterdir())
 
     def __len__(self):
         return len(self.files)
 
-    def __getitem__(self, i: int):
+    def __getitem__(self, i: int) -> FloatBundle:
         path = self.files[i]
-        return FloatBatchBundle(np.array(nibabel.load(path).dataobj, dtype=np.float32))
-
-    def batches(self) -> Iterator[FloatBatchBundle]:
-        for i in range(0, len(self), self.batch_size):
-            yield FloatBatchBundle.batch([self[j] for j in range(i, min(i + self.batch_size, len(self)))])
+        return FloatBundle(np.array(nibabel.load(path).dataobj, dtype=np.float32))
 
 
-def split_datasets(*, data_path: Path, shape: tuple[int, int, int], batch_size: int) \
-        -> tuple[StoredDataset, StoredDataset]:
-    train_tempdir = TemporaryDirectory()
-    valid_tempdir = TemporaryDirectory()
+def update_datasets(*, data_path: Path, output_path: Path, shape: tuple[int, int, int]):
+    train_dir = output_path / "train"
+    valid_dir = output_path / "valid"
+    train_dir.mkdir(exist_ok=True)
+    valid_dir.mkdir(exist_ok=True)
     k = 0
     for i, case in enumerate(generators.cases(data_path, generators.criterion(bundle=True))):
         fbb = IntBundle(np.array(nibabel.load(
             case / f"train_bundle.nii.gz"
-        ).dataobj, dtype=np.int16)).to_float_batch_bundle()
+        ).dataobj, dtype=np.int16)).to_float_bundle()
         for t in fbb.slices(shape):
             nibabel.save(
                 nibabel.Nifti1Image(
                     t.numpy(),
                     affine=np.eye(4)
                 ),
-                Path((valid_tempdir if i % 10 == 0 else train_tempdir).name)
-                / f"{k}.nii.gz",
+                (valid_dir if i % 10 == 0 else train_dir) / f"{k:06}.nii.gz",
             )
             k += 1
 
+
+def get_loaders(path: Path, batch_size: int):
     return (
-        StoredDataset(tempdir=train_tempdir, batch_size=batch_size),
-        StoredDataset(tempdir=valid_tempdir, batch_size=batch_size),
+        DataLoader(StoredDataset(path / "train"), batch_size=batch_size, pin_memory=True),
+        DataLoader(StoredDataset(path / "valid"), batch_size=batch_size, pin_memory=True)
     )

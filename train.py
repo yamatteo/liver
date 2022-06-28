@@ -228,7 +228,7 @@ def training_round(model, *, dataloader: DataLoader, optimizer: Optimizer, devic
             optimizer.step()
 
             round_loss += loss.item()
-            sample, _, _ = report.sample(scan.cpu(), pred.cpu(), segm.cpu())
+            sample, _, _ = report.sample(scan.detach().cpu(), pred.detach().cpu(), segm.detach().cpu())
             info_items["training_sample"] = sample
             report.append(info_items)
 

@@ -169,18 +169,16 @@ def eval_valid_round(model, *, dataset: StoredDataset, batch_size: int, device: 
 
             round_loss += torch.sum(batch_losses).item()
             progress.update(task, advance=batch_size)
-        for n in random.choices(range(len(dataset)), k=8):
-            fake_batch = FloatBatchBundle(dataset[n].unsqueeze(0)).to(device=device, dtype=torch.float32)
-            scan, segm = fake_batch.separate()
-
-            pred = model.forward(scan)
-            sample, liver_sample, tumor_sample = report.sample(scan.cpu(), pred.cpu(), segm.cpu())
-            report.append({
-                "valid_dataset_sample": sample,
-                "liver_sample": liver_sample,
-                "tumor_sample": tumor_sample
-            })
-        report.append({"valid_dataset_global_loss": round_loss})
+        # for n in random.choices(range(len(dataset)), k=8):
+        #     fake_batch = FloatBatchBundle(dataset[n].unsqueeze(0)).to(device=device, dtype=torch.float32)
+        #     scan, segm = fake_batch.separate()
+        #
+        #     pred = model.forward(scan)
+        #     sample, _, _ = report.sample(scan.cpu(), pred.cpu(), segm.cpu())
+        #     report.append({
+        #         "valid_dataset_sample": sample
+        #     })
+        report.append({"valid_dataset_per_scan_loss": round_loss/len(dataset)})
 
     return round_loss
 
@@ -205,8 +203,8 @@ def eval_train_round(model, *, dataset: StoredDataset, batch_size: int, device: 
 
             round_loss += torch.sum(batch_losses).item()
 
-        progress.update(task, advance=batch_size)
-    report.append({"train_dataset_global_loss": round_loss})
+            progress.update(task, advance=batch_size)
+    report.append({"train_dataset_per_scan_loss": round_loss/len(dataset)})
     return round_loss, losses
 
 def training_round(model, *, dataloader: DataLoader, optimizer: Optimizer, device: torch.device, epoch: int, epochs: int):
@@ -230,6 +228,8 @@ def training_round(model, *, dataloader: DataLoader, optimizer: Optimizer, devic
             optimizer.step()
 
             round_loss += loss.item()
+            sample, _, _ = report.sample(scan.cpu(), pred.cpu(), segm.cpu())
+            info_items["training_sample"] = sample
             report.append(info_items)
 
             progress.update(task, advance=1)
@@ -249,7 +249,6 @@ def train_cycle(model, *,
     dataloader = None
     for epoch in range(epochs):
         if epoch % 20 == 0:
-            epoch_loss = 0
             losses = {}
             model.eval()
 

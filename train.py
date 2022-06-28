@@ -174,8 +174,12 @@ def eval_valid_round(model, *, dataset: StoredDataset, batch_size: int, device: 
             scan, segm = fake_batch.separate()
 
             pred = model.forward(scan)
-            sample, _ = report.sample(scan.cpu(), pred.cpu(), segm.cpu())
-            report.append({"valid_dataset_sample": sample})
+            sample, liver_sample, tumor_sample = report.sample(scan.cpu(), pred.cpu(), segm.cpu())
+            report.append({
+                "valid_dataset_sample": sample,
+                "liver_sample": liver_sample,
+                "tumor_sample": tumor_sample
+            })
         report.append({"valid_dataset_global_loss": round_loss})
 
     return round_loss

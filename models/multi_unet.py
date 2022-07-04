@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import math
+
+import numpy as np
 import torch
+from rich.progress import Progress
 from torch import nn, Tensor
 from torch.nn import Module, functional
 
-from tensors import ScanBatch, FloatSegmBatch
+from tensors import FloatSegmBatch, FloatScan, Segm, FloatScanBatch, FloatSegm
 
 
 def actv_layer(actv: str, **_) -> Module | None:
@@ -81,10 +85,10 @@ class Block(Module):
                        f"drop={drop!r}" \
                        f")"
 
-        self.repr = f"Block({'>'.join([str(in_channels), *([str(out_channels)]*complexity)])}" \
-                    f"{'>'+actv if actv else ''}" \
-                    f"{'>'+norm if norm else ''}" \
-                    f"{'>'+drop if drop else ''}" \
+        self.repr = f"Block({'>'.join([str(in_channels), *([str(out_channels)] * complexity)])}" \
+                    f"{'>' + actv if actv else ''}" \
+                    f"{'>' + norm if norm else ''}" \
+                    f"{'>' + drop if drop else ''}" \
                     f")"
 
         layers = [
@@ -245,5 +249,29 @@ class UNet(Module):
             nn.Hardsigmoid()
         )
 
-    def forward(self, x: ScanBatch) -> FloatSegmBatch:
-        return FloatSegmBatch(self.model(x))
+    def forward(self, x: FloatScan | FloatScanBatch) -> FloatSegm | FloatSegmBatch:
+        if isinstance(x, FloatScan):
+            return FloatSegm(self.model(x))
+        else:
+            return FloatSegmBatch(self.model(x))
+
+    def apply(self, x: FloatScan, thickness: int = 8) -> Segm:
+        shape = x.size()[-3, :]
+        base = torch.zeros(shape, device=x.device, dtype=torch.float32)
+        size = x.size("D")
+        assert x.boundaries() == (0, size)
+        assert size >= thickness
+        num_slices = math.ceil(size / thickness)
+
+        with Progress(transient=True) as progress:
+            task = progress.add_task(
+                f"Segmenting scan.",
+                total=num_slices
+            )
+            for j in range(num_slices):
+                i = int(j * (size - thickness) / (num_slices - 1))
+                slice = torch.narrow(x, -1, i, thickness)
+                pred = self.forward(slice)
+                base[..., i:i + thickness] += pred
+                progress.update(task, advance=1)
+        return FloatSegm(base).as_int()

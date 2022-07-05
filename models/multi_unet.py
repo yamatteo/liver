@@ -256,7 +256,7 @@ class UNet(Module):
             return FloatSegmBatch(self.model(x))
 
     def apply(self, x: FloatScan, thickness: int = 8) -> Segm:
-        shape = (x.size("H"), x.size("W"), x.size("D"))
+        shape = (3, x.size("H"), x.size("W"), x.size("D"))
         base = torch.zeros(shape, device=x.device, dtype=torch.float32)
         size = x.size("D")
         assert x.boundaries() == (0, size)

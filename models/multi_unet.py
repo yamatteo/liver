@@ -251,7 +251,7 @@ class UNet(Module):
 
     def forward(self, x: FloatScan | FloatScanBatch) -> FloatSegm | FloatSegmBatch:
         if isinstance(x, FloatScan):
-            return FloatSegm(self.model(x))
+            return FloatSegm(self.model(x.unsqueeze(0)).squeeze(0))
         else:
             return FloatSegmBatch(self.model(x))
 

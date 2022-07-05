@@ -31,3 +31,7 @@ def register_case(source_path: Path, target_path: Path, niftybin: Path):
                     f"-maxit 50 "
                 ).read()
                 logfile.write(niftireg_log)
+        console.print(
+            f"{' ' * len(case_name)}  "
+            f"Registered images saved in {target_path.absolute()}."
+        )

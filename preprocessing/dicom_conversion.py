@@ -129,5 +129,5 @@ def process_dicomdir(source_path: Path, target_path: Path):
             )
         console.print(
             f"{' ' * len(case_name)}  "
-            f"Images saved in {target_path.absolute()}."
+            f"Original images saved in {target_path.absolute()}."
         )

@@ -1,9 +1,9 @@
+from __future__ import annotations
+
 from pathlib import Path
 
 import nibabel
-import numpy as np
-import torch
-from torch.nn.functional import one_hot
+
 from tensors import *
 
 

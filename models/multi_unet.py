@@ -255,6 +255,7 @@ class UNet(Module):
         else:
             return FloatSegmBatch(self.model(x))
 
+    @torch.no_grad()
     def apply(self, x: FloatScan, thickness: int = 8) -> Segm:
         shape = (3, x.size("H"), x.size("W"), x.size("D"))
         base = torch.zeros(shape, device=x.device, dtype=torch.float32)

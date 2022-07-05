@@ -139,7 +139,7 @@ class FloatSegm(ShapedTensor):
     fixed_dtype = torch.float32
 
     def as_int(self) -> Segm:
-        return Segm(torch.argmax(self, dim=0))
+        return Segm(torch.argmax(self, dim=0).to(dtype=torch.int16))
 
 
 class FloatBundle(ShapedTensor):

@@ -5,38 +5,44 @@ from typing import Iterator
 
 import torch
 from torch import Tensor
-from torch.nn import functional
+from torch.nn import functional, Parameter
 
 
 class ShapedTensor(Tensor):
+    """Class of tensor that checks its shape and data type on creation."""
     fixed_shape = ...
     fixed_dtype = ...
 
-    def __new__(cls, x, *args, **kwargs):
-        _t = torch.as_tensor(x)
-        if cls.fixed_shape is not ...:
-            cls.check_shape(_t.shape)
-        if cls.fixed_dtype is not ... and cls.fixed_dtype != _t.dtype:
-            raise ValueError(f"Expected values of type {cls.fixed_dtype}, got {_t.dtype}")
+    def __new__(cls, data, *args, **kwargs):
+        # From pytorch documentation:
+        #
+        #   torch.as_tensor(data)
+        #
+        # Converts data into a tensor, sharing data and preserving autograd history if possible.
+        # If data is a NumPy array then a tensor is constructed using torch.from_numpy().
+        _t = torch.as_tensor(data)
         _t.__class__ = cls
         return _t
 
-    @classmethod
-    def check_shape(cls, shape):
-        correct_shape_len = len(shape) == len(cls.fixed_shape)
-        correct_sizes = (
-            fixed is None or fixed == value
-            for value, fixed in zip(shape, cls.fixed_shape.values())
-        )
-        if not correct_shape_len or not all(correct_sizes):
-            shape_error = (
-                    f"{cls.__name__} should be a ("
+    def __init__(self, *args, **kwargs):
+        super(ShapedTensor, self).__init__()
+        if self.fixed_shape is not ...:
+            shape = self.shape
+            error_message = (
+                    f"{type(self).__name__} should be a ("
                     + ', '.join([
                 key if value is None else f"{key}={value}"
-                for key, value in cls.fixed_shape.items()
-            ]) + f") shaped vector, got {tuple(shape)}."
+                for key, value in self.fixed_shape.items()
+            ])
+                    + f") shaped vector, got {tuple(shape)}."
             )
-            raise ValueError(shape_error)
+            if len(shape) != len(self.fixed_shape):
+                raise ValueError(error_message)
+            for value, fixed in zip(shape, self.fixed_shape.values()):
+                if fixed is not None and fixed != value:
+                    raise ValueError(error_message)
+        if self.fixed_dtype is not ... and self.fixed_dtype != self.dtype:
+            raise ValueError(f"{type(self).__name__} expect values of type {self.fixed_dtype}, got {self.dtype}")
 
     def size(self, dim: None | int | str = None) -> int | torch.Size:
         if dim is None:
@@ -58,6 +64,34 @@ class Volume(ShapedTensor):
 
     def plane(self, z: int) -> Plane:
         return Plane(self[:, :, z])
+
+    def with_neighbours(self, minimum: int = 1, kernel_size: tuple[int, int, int] = (3, 3, 3)) -> Volume:
+        kx, ky, kz = kernel_size
+        assert all(k % 2 == 1 for k in kernel_size)
+        kernel = torch.nn.Conv3d(
+            in_channels=1,
+            out_channels=1,
+            kernel_size=kernel_size,
+            padding=(kx // 2, ky // 2, kz // 2),
+            device=self.device,
+            dtype=torch.float32,
+        )
+        kernel.bias = Parameter(torch.tensor([0.1 - minimum]), requires_grad=False)
+        kernel.weight = Parameter(torch.ones((1, 1, *kernel_size)), requires_grad=False)
+        return Volume(
+            torch.clamp(kernel(self.unsqueeze(0).to(dtype=torch.float32)).squeeze(0), 0, 1).to(dtype=self.dtype))
+
+    def set_difference(self, other: Volume) -> Volume:
+        return Volume(torch.clamp((self - other), 0, 1).to(dtype=torch.int16))
+
+    @classmethod
+    def masks(cls, segm: Segm) -> tuple[Volume, Volume, Volume]:
+        orig_liver = segm.liver_mask()
+        tumor = segm.tumor_mask()
+        ext_tumor = tumor.with_neighbours(1, (7, 7, 1))
+        liver = orig_liver.set_difference(ext_tumor)
+        perit = orig_liver.set_difference(liver)
+        return liver, perit, tumor
 
 
 class Scan(ShapedTensor):
@@ -105,6 +139,12 @@ class Segm(Volume, ShapedTensor):
     def as_float(self) -> FloatSegm:
         return FloatSegm(functional.one_hot(self, 3).permute(3, 0, 1, 2).float())
 
+    def liver_mask(self) -> Volume:
+        return Volume((self == 1).to(dtype=torch.int16))
+
+    def tumor_mask(self) -> Volume:
+        return Volume((self == 2).to(dtype=torch.int16))
+
 
 class Bundle(ShapedTensor):
     fixed_shape = {"C": 5, "H": None, "W": None, "D": None}
@@ -125,6 +165,7 @@ class Bundle(ShapedTensor):
             self[0:4].float(),
             Segm(self[4]).as_float()
         ], dim=0))
+
 
 class FloatScan(Scan, ShapedTensor):
     fixed_shape = {"C": 4, "H": None, "W": None, "D": None}
@@ -215,33 +256,35 @@ class FloatSegmBatch(ShapedTensor):
         return IntSegmBatch(torch.argmax(self, dim=1))
 
 
-class FloatBatchBundle(ShapedTensor):
-    fixed_shape = {"N": None, "C": 7, "H": None, "W": None, "D": None}
-    fixed_dtype = torch.float32
-
-    def separate(self) -> tuple[FloatScanBatch, FloatSegmBatch]:
-        return FloatScanBatch(self[:, 0:4]), FloatSegmBatch(self[:, 4:7])
-
-    # def dimensional_slices(self, thickness: int, dim: int) -> Iterator["FloatBatchBundle"]:
-    #     """Iterate over slices of self along dimension `dim`.
-    #
-    #      Slices may overlap if `thickness` does not divide `self.size(dim)` evenly.
-    #      If `self.size(dim)` is less than `thickness`, yields only `self`."""
-    #     length = self.size(dim)
-    #     if length <= thickness:
-    #         yield self
-    #         return
-    #     num_slices = math.ceil(length / thickness)
-    #     for j in range(num_slices):
-    #         i = int(j * (length - thickness) / (num_slices - 1))
-    #         yield torch.narrow(self, dim, i, thickness)
-    #
-    # def slices(self, shape: tuple[int, int, int]) -> Iterator["FloatBatchBundle"]:
-    #     """Iterate over FloatBatchBundle slices of given shape. Possibly overlapping."""
-    #     for h_slice in self.dimensional_slices(shape[0], 2):
-    #         for w_slice in h_slice.dimensional_slices(shape[1], 3):
-    #             yield from w_slice.dimensional_slices(shape[2], 4)
-
+######################################################################################################
+#
+# class FloatBatchBundle(ShapedTensor):
+#     fixed_shape = {"N": None, "C": 7, "H": None, "W": None, "D": None}
+#     fixed_dtype = torch.float32
+#
+#     def separate(self) -> tuple[FloatScanBatch, FloatSegmBatch]:
+#         return FloatScanBatch(self[:, 0:4]), FloatSegmBatch(self[:, 4:7])
+#
+#     # def dimensional_slices(self, thickness: int, dim: int) -> Iterator["FloatBatchBundle"]:
+#     #     """Iterate over slices of self along dimension `dim`.
+#     #
+#     #      Slices may overlap if `thickness` does not divide `self.size(dim)` evenly.
+#     #      If `self.size(dim)` is less than `thickness`, yields only `self`."""
+#     #     length = self.size(dim)
+#     #     if length <= thickness:
+#     #         yield self
+#     #         return
+#     #     num_slices = math.ceil(length / thickness)
+#     #     for j in range(num_slices):
+#     #         i = int(j * (length - thickness) / (num_slices - 1))
+#     #         yield torch.narrow(self, dim, i, thickness)
+#     #
+#     # def slices(self, shape: tuple[int, int, int]) -> Iterator["FloatBatchBundle"]:
+#     #     """Iterate over FloatBatchBundle slices of given shape. Possibly overlapping."""
+#     #     for h_slice in self.dimensional_slices(shape[0], 2):
+#     #         for w_slice in h_slice.dimensional_slices(shape[1], 3):
+#     #             yield from w_slice.dimensional_slices(shape[2], 4)
+#
 
 ### Tests
 import numpy as np

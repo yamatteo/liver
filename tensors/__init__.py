@@ -126,6 +126,9 @@ class Bundle(Integer, Tridimensional, ColdBundle):
 
 
 class FloatScan(Floating, Tridimensional, Phases):
+    def get_plane(self, phase: str, z: int) -> Slice:
+        return Scan.from_float(self).get_plane(phase, z)
+
     @classmethod
     def from_int(cls, scan: Scan) -> FloatScan:
         return cls(scan.to(dtype=torch.float32))
@@ -133,9 +136,7 @@ class FloatScan(Floating, Tridimensional, Phases):
 
 class FloatSegm(Floating, Tridimensional, HotSegm):
     def get_mask(self, channel: str, z: int) -> Mask:
-        channel = ["backg", "liver", "tumor"].index(channel)
-        segm = Segm.from_float(self)
-        return Mask((segm.select_section(z) == channel).to(dtype=torch.int16))
+        return Segm.from_float(self).get_mask(channel, z)
 
     @classmethod
     def from_int(cls, segm: Segm) -> FloatSegm:
@@ -155,12 +156,14 @@ class FloatBundle(Floating, Tridimensional, HotBundle):
         ], dim=0))
 
 
-class FloatScanBatch(FloatScan, Batch):
-    pass
+class FloatScanBatch(Floating, Tridimensional, Phases, Batch):
+    def get_plane(self, n: int, phase: str, z: int) -> Slice:
+        return self.select_item(n).get_plane(phase, z)
 
 
-class FloatSegmBatch(FloatSegm, Batch):
-    pass
+class FloatSegmBatch(Floating, Tridimensional, HotSegm, Batch):
+    def get_mask(self, n: int, channel: str, z: int) -> Mask:
+        return self.select_item(n).get_mask(channel, z)
 
 
 class FloatBatchBundle(FloatBundle, Batch):

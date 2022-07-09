@@ -3,7 +3,7 @@ import random
 import rich
 import wandb
 
-from tensors import FloatScanBatch, FloatSegmBatch
+from tensors import *
 from utils.image_generation import get_white, rgb_sample
 
 

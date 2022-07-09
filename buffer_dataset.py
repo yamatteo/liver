@@ -1,15 +1,12 @@
 from __future__ import annotations
 
-import heapq
 from pathlib import Path
-from typing import TypeVar, Callable
+from typing import TypeVar
 
 import nibabel
-import numpy as np
 from rich.console import Console
 from torch.utils.data import Dataset, DataLoader
 
-import report
 from tensors import *
 from utils import generators
 
@@ -135,12 +132,12 @@ class StoredDataset(Dataset):
 
     def batches(self, size: int):
         for i in range(0, len(self.files), size):
-            keys = list(range(i, min(len(self.files), i+size)))
+            keys = list(range(i, min(len(self.files), i + size)))
             batch = FloatBatchBundle(torch.stack([self[j] for j in keys]))
             yield keys, batch
 
 
-def store_datasets(*, source_path: Path, target_path: Path, shape: tuple[int, int, int]):
+def store_datasets(*, source_path: Path, target_path: Path, shape: tuple[int, int, int], pooler=None):
     target_path.mkdir(parents=True, exist_ok=True)
     train_dir = target_path / "train"
     valid_dir = target_path / "valid"
@@ -149,6 +146,11 @@ def store_datasets(*, source_path: Path, target_path: Path, shape: tuple[int, in
     k = 0
     for i, bundle in enumerate(generators.cold_bundles(source_path)):
         for t in generators.slices(bundle, shape):
+            if pooler is not None:
+                scan, segm = t.separate()
+                scan = Scan.from_float(pooler(FloatScan.from_int(scan)))
+                segm = Segm.from_float(pooler(FloatSegm.from_int(segm)))
+                t = Bundle.from_join(scan, segm)
             nibabel.save(
                 nibabel.Nifti1Image(
                     t.numpy(),
@@ -158,11 +160,13 @@ def store_datasets(*, source_path: Path, target_path: Path, shape: tuple[int, in
             )
             k += 1
 
+
 def get_datasets(path: Path):
     return (
-        StoredDataset(path/"train"),
-        StoredDataset(path/"valid")
+        StoredDataset(path / "train"),
+        StoredDataset(path / "valid")
     )
+
 
 def get_loaders(path: Path, batch_size: int):
     return (

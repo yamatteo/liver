@@ -140,7 +140,7 @@ class FloatSegm(Floating, Tridimensional, HotSegm):
 
     @classmethod
     def from_int(cls, segm: Segm) -> FloatSegm:
-        return cls(functional.one_hot(segm, 3).permute(3, 0, 1, 2).float())
+        return cls(functional.one_hot(segm.to(dtype=torch.int64), 3).permute(3, 0, 1, 2).float())
 
 
 class FloatBundle(Floating, Tridimensional, HotBundle):

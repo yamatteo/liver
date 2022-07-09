@@ -71,13 +71,11 @@ def cases(base_path: Path | str, accepted_dir: Callable[[Path], bool]) -> Iterat
 #                 k += 1
 
 
-# def train_bundles(base_path: Path | str) -> Iterator[FloatBatchBundle]:
-#     """Iterate over NCHWD training tensors. N=1. C=7 (bavt-blt)."""
-#     for case in cases(base_path, criterion(bundle=True)):
-#         obj = ColdBundle(np.array(nibabel.load(
-#             case / f"train_bundle.nii.gz"
-#         ).dataobj, dtype=np.int16))
-#         yield obj.to_float_batch_bundle()
+def train_bundles(path: Path) -> Iterator[Bundle]:
+    for case in cases(path, criterion(bundle=True)):
+        yield Bundle(np.array(nibabel.load(
+            case / f"train_bundle.nii.gz"
+        ).dataobj, dtype=np.int16))
 #
 #
 # def train_slices(base_path: Path | str, shape: tuple[int, int, int], split=False) \

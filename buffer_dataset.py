@@ -144,7 +144,7 @@ def store_datasets(*, source_path: Path, target_path: Path, shape: tuple[int, in
     train_dir.mkdir(exist_ok=True)
     valid_dir.mkdir(exist_ok=True)
     k = 0
-    for i, bundle in enumerate(generators.cold_bundles(source_path)):
+    for i, bundle in enumerate(generators.train_bundles(source_path)):
         for t in generators.slices(bundle, shape):
             if pooler is not None:
                 scan, segm = t.separate()

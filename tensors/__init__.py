@@ -6,6 +6,7 @@ from typing import Iterator
 import torch
 from torch.nn import functional
 
+from .as_tensor import AsTensor
 from .batch import Batch
 from .dimensional import ShapedTensor, Bidimensional, Tridimensional
 from .multichannel import MultiChannel, Phases, ColdBundle, HotSegm, HotBundle
@@ -281,6 +282,22 @@ class TestTensors(unittest.TestCase):
         # Wrong shape, raises ValueError
         self.assertRaises(ValueError, MockTensor, np.zeros((4, 3, 5, 5)))
         self.assertRaises(ValueError, MockTensor, np.zeros((4, 2)))
+
+    def test_inheritance(self):
+        class Mock(Floating, Tridimensional, HotSegm):
+            pass
+
+        t = Mock(torch.zeros((3, 8, 8, 5)))
+        # self.assertEqual({"C": 3, "X": None, "Y": None, "Z": None}, t.fixed_shape)
+        m = torch.nn.AvgPool3d((2, 2, 1))
+        t = m(t)
+        # t.__init__()
+        self.assertEqual(t.fixed_shape, {"C": 3, "X": None, "Y": None, "Z": None})
+        self.assertIsInstance(t, Mock)
+
+        t = torch.unsqueeze(t, 0)
+        self.assertIsInstance(t, AsTensor)
+        self.assertNotIsInstance(t, Mock)
 
 
 class TestScan(unittest.TestCase):

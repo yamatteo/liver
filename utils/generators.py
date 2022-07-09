@@ -29,7 +29,7 @@ def dimensional_slices(t: T, thickness: int, dim: int | str) -> Iterator[T]:
     num_slices = math.ceil(length / thickness)
     for j in range(num_slices):
         i = int(j * (length - thickness) / (num_slices - 1))
-        yield torch.narrow(t, dim, i, thickness)
+        yield type(t)(torch.narrow(t, dim, i, thickness))
 
 
 def slices(t: T, shape: tuple[int, int, int]) -> Iterator[T]:

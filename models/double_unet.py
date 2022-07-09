@@ -9,7 +9,7 @@ from torch import nn, Tensor
 from torch.nn import Module, functional
 
 from tensors import *
-from skip_connection_layer import Layer, pool_layer, unpool_layer
+from .skip_connection_layer import Layer, pool_layer, unpool_layer
 
 
 class UNet(Module):

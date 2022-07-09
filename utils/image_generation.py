@@ -2,18 +2,19 @@ from __future__ import annotations
 
 import random
 
+import torch
 from rich.console import Console
 
-from tensors import *
+from tensors import FloatScanBatch, FloatSegmBatch, Plane
 
 console = Console()
 
 
-def get_white(scan: ScanBatch, *, n, phase="v", z) -> Plane:
+def get_white(scan: FloatScanBatch, *, n: int, phase: int | str = "v", z: int) -> Plane:
     return (50 + torch.clamp(scan.get_plane(n=n, phase=phase, z=z), -50, 250)) / 300
 
 
-def get_color(scan: ScanBatch, pred: FloatSegmBatch, segm: FloatSegmBatch, *, n, z, mode: str = "none") -> Plane:
+def get_color(scan: FloatScanBatch, pred: FloatSegmBatch, segm: FloatSegmBatch, *, n, z, mode: str = "none") -> Plane:
     if mode == "error":
         # color = torch.sum(torch.abs(segm - pred), dim=1, keepdim=True)
         color = Plane(torch.sum(torch.abs(segm - pred), dim=1, keepdim=True)[n, 0, :, :, z])
@@ -30,7 +31,7 @@ def get_color(scan: ScanBatch, pred: FloatSegmBatch, segm: FloatSegmBatch, *, n,
     return Plane(torch.clamp(get_white(scan, n=n, z=z) + color, 0, 1))
 
 
-def rgb_sample(scan: ScanBatch, pred: FloatSegmBatch, segm: FloatSegmBatch, *, n, z: int | None = None,
+def rgb_sample(scan: FloatScanBatch, pred: FloatSegmBatch, segm: FloatSegmBatch, *, n, z: int | None = None,
                mode: tuple[str, str, str], data_format: str = "CHW"):
     if z is None:
         z = random.randint(0, scan.size(4) - 1)

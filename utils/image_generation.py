@@ -5,7 +5,7 @@ import random
 import torch
 from rich.console import Console
 
-from tensors import FloatScanBatch, FloatSegmBatch, Slice, Segm
+from subclass_tensors import *
 
 console = Console()
 

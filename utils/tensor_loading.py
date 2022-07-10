@@ -4,13 +4,13 @@ from pathlib import Path
 
 import nibabel
 
-from tensors import *
+from subclass_tensors import *
 
 
 def load_scan(case_path: Path) -> tuple[tuple[int, int, int], np.ndarray, FloatScan]:
     affine = nibabel.load(case_path / f"registered_phase_v.nii.gz").affine
     scan = Scan(torch.stack([
-        Volume(np.array(nibabel.load(
+        torch.as_tensor(np.array(nibabel.load(
             case_path / f"registered_phase_{phase}.nii.gz"
         ).dataobj, dtype=np.int16))
         for phase in ["b", "a", "v", "t"]

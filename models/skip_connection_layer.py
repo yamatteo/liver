@@ -25,15 +25,15 @@ def pool_layer(pool: str) -> Module | None:
 def unpool_layer(pool: str) -> Module | None:
     """Return required upsampling layer."""
     if pool == "max22":
-        return nn.Upsample(size=(2, 2), mode='nearest')
+        return nn.Upsample(scale_factor=(2, 2), mode='nearest')
     if pool == "max222":
-        return nn.Upsample(size=(2, 2, 2), mode='nearest')
+        return nn.Upsample(scale_factor=(2, 2, 2), mode='nearest')
     if pool == "max221":
-        return nn.Upsample(size=(2, 2, 1), mode='nearest')
+        return nn.Upsample(scale_factor=(2, 2, 1), mode='nearest')
     if pool == "avg222":
-        return nn.Upsample(size=(2, 2, 2), mode='trilinear')
+        return nn.Upsample(scale_factor=(2, 2, 2), mode='trilinear')
     if pool == "avg441":
-        return nn.Upsample(size=(4, 4, 1), mode='trilinear')
+        return nn.Upsample(scale_factor=(4, 4, 1), mode='trilinear')
     return None
 
 
@@ -90,7 +90,8 @@ class Layer(Module):
                 bottom_dropout=bottom_dropout,
                 up_activation=up_activation,
                 up_normalization=up_normalization,
-                up_dropout=up_dropout
+                up_dropout=up_dropout,
+                pool=pool,
             )
             self.unpool = unpool_layer(pool)
             self.upconv = Block(

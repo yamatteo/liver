@@ -8,7 +8,7 @@ from rich.progress import Progress
 from torch import nn, Tensor
 from torch.nn import Module, functional
 
-from tensors import FloatSegmBatch, FloatScan, Segm, FloatScanBatch, FloatSegm
+from wrapped_tensors import FloatSegmBatch, FloatScan, Segm, FloatScanBatch, FloatSegm
 
 
 def actv_layer(actv: str, **_) -> Module | None:

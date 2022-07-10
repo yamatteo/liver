@@ -7,7 +7,7 @@ import nibabel
 from rich.console import Console
 from torch.utils.data import Dataset, DataLoader
 
-from tensors import *
+from subclass_tensors import *
 from utils import generators
 
 console = Console()
@@ -121,19 +121,19 @@ class StoredDataset(Dataset):
     def __len__(self):
         return len(self.files)
 
-    def __getitem__(self, i: int) -> HotBundle:
+    def __getitem__(self, i: int) -> FloatBundle:
         path = self.files[i]
-        return HotBundle(np.array(nibabel.load(path).dataobj, dtype=np.float32))
+        return FloatBundle.from_int(Bundle(np.array(nibabel.load(path).dataobj, dtype=np.int16)))
 
     def subset(self, keys: list[int]):
         ds = StoredDataset.__new__(StoredDataset)
         ds.files = [f for i, f in enumerate(self.files) if i in keys]
         return ds
 
-    def batches(self, size: int):
+    def batches(self, size: int) -> tuple[list[int], FloatBundleBatch]:
         for i in range(0, len(self.files), size):
             keys = list(range(i, min(len(self.files), i + size)))
-            batch = FloatBatchBundle(torch.stack([self[j] for j in keys]))
+            batch = FloatBundleBatch.from_list([self[j] for j in keys])
             yield keys, batch
 
 
@@ -145,12 +145,13 @@ def store_datasets(*, source_path: Path, target_path: Path, shape: tuple[int, in
     valid_dir.mkdir(exist_ok=True)
     k = 0
     for i, bundle in enumerate(generators.train_bundles(source_path)):
+        if pooler is not None:
+            scan, segm = bundle.separate()
+            scan = Scan.from_float(pooler(FloatScan.from_int(scan)))
+            segm = Segm.from_float(pooler(FloatSegm.from_int(segm)))
+            bundle = Bundle.from_join(scan, segm)
+
         for t in generators.slices(bundle, shape):
-            if pooler is not None:
-                scan, segm = t.separate()
-                scan = Scan.from_float(pooler(FloatScan.from_int(scan)))
-                segm = Segm.from_float(pooler(FloatSegm.from_int(segm)))
-                t = Bundle.from_join(scan, segm)
             nibabel.save(
                 nibabel.Nifti1Image(
                     t.numpy(),

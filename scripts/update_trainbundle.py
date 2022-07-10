@@ -7,6 +7,7 @@ import numpy as np
 import torch
 from rich.console import Console
 
+from wrapped_tensors import Scan, Segm, Bundle
 from utils.path_explorer import discover, get_criterion
 
 
@@ -14,33 +15,13 @@ def update_trainbundle(case: Path):
     console.print(f"[bold black]{case.name}.[/bold black] Updating bundle.")
 
     affine = nibabel.load(case / f"registered_phase_v.nii.gz").affine
-    scan = torch.stack([
-        torch.tensor(np.array(nibabel.load(
-            case / f"registered_phase_{phase}.nii.gz"
-        ).dataobj, dtype=np.int16))
-        for phase in ["b", "a", "v", "t"]
-    ])
-    good_z = [not bool(torch.any(torch.all(torch.all(scan[:, :, :, z] == 0, dim=1), dim=1))) for z in
-              range(scan.size(3))]
-    a = 0
-    for z in range(scan.size(3)):
-        if any(good_z[:z]):
-            break
-        else:
-            a = z
-    b = scan.size(3)
-    for z in reversed(range(scan.size(3))):
-        if any(good_z[z:]):
-            break
-        else:
-            b = z
-    segm = torch.tensor(np.array(nibabel.load(
-        case / f"segmentation.nii.gz"
-    ).dataobj, dtype=np.int16)).unsqueeze(0)
+    scan = Scan.from_niigz(case)
+    segm = Segm.from_niigz(case)
+    bundle = Bundle.from_join(scan, segm)
 
     nibabel.save(
         nibabel.Nifti1Image(
-            torch.cat([scan[:, :, :, a:b], segm[:, :, :, a:b]], dim=0).cpu().numpy(),
+            bundle.cpu().numpy(),
             affine=affine
         ),
         case / "train_bundle.nii.gz",

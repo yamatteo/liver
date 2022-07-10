@@ -10,7 +10,7 @@ import numpy as np
 import torch
 from torch import Tensor
 
-from tensors import Scan, Segm, ColdBundle, FloatBatchBundle, FloatSegmBatch, Bundle, ShapedTensor, Tridimensional
+from subclass_tensors import *
 from utils.path_explorer import criterion
 
 T = TypeVar("T")
@@ -29,7 +29,7 @@ def dimensional_slices(t: T, thickness: int, dim: int | str) -> Iterator[T]:
     num_slices = math.ceil(length / thickness)
     for j in range(num_slices):
         i = int(j * (length - thickness) / (num_slices - 1))
-        yield type(t)(torch.narrow(t, dim, i, thickness))
+        yield torch.narrow(t, dim, i, thickness)
 
 
 def slices(t: T, shape: tuple[int, int, int]) -> Iterator[T]:
@@ -73,6 +73,7 @@ def cases(base_path: Path | str, accepted_dir: Callable[[Path], bool]) -> Iterat
 
 def train_bundles(path: Path) -> Iterator[Bundle]:
     for case in cases(path, criterion(bundle=True)):
+        print("Opening", case)
         yield Bundle(np.array(nibabel.load(
             case / f"train_bundle.nii.gz"
         ).dataobj, dtype=np.int16))
@@ -80,7 +81,7 @@ def train_bundles(path: Path) -> Iterator[Bundle]:
 #
 # def train_slices(base_path: Path | str, shape: tuple[int, int, int], split=False) \
 #         -> Iterator[FloatBatchBundle | tuple[ScanBatch, FloatSegmBatch]]:
-#     """Iterate over NCHWD training tensors of given shape.
+#     """Iterate over NCHWD training wrapped_tensors of given shape.
 #
 #     Yields FloatBatchBundle or (ScanBatch, FloatSegmBatch) tuple."""
 #     if split:

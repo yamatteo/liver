@@ -11,7 +11,6 @@ from adabelief_pytorch import AdaBelief
 
 # from dataset import BufferDataset2 as BufferDataset
 from models.multi_unet import UNet
-from tensors import ScanBatch
 from train import train_cycle
 from utils import generators
 from utils.path_explorer import discover, get_criterion

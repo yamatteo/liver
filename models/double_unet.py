@@ -8,7 +8,7 @@ from rich.progress import Progress
 from torch import nn, Tensor
 from torch.nn import Module, functional
 
-from tensors import *
+from subclass_tensors import *
 from .skip_connection_layer import Layer, pool_layer, unpool_layer
 
 
@@ -68,8 +68,8 @@ class UNet(Module):
             nn.Tanh()
         )
 
-    def forward(self, x: Tensor) -> Tensor:
-        return self.model(x)
+    def forward(self, x: Tensor) -> FloatSegmBatch:
+        return FloatSegmBatch(self.model(x))
 
     # @torch.no_grad()
     # def apply(self, x: FloatScan, thickness: int = 8) -> Segm:

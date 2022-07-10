@@ -31,7 +31,7 @@ def eval_valid_round(model, *, dataset: StoredDataset, batch_size: int, device: 
             segm = segm.to(device=device)
 
             pred = model.forward(scan)
-            round_loss += batch_cross_entropy(segm, pred) * batch_size
+            round_loss += batch_cross_entropy(pred, segm) * batch_size
 
             progress.update(task, advance=batch_size)
         report.append({"valid_dataset_per_scan_loss": round_loss/len(dataset)})
@@ -53,7 +53,7 @@ def eval_train_round(model, *, dataset: StoredDataset, batch_size: int, device: 
             segm = segm.to(device=device)
 
             pred = model.forward(scan)
-            batch_losses_items = individual_cross_entropy(segm, pred, keys=keys)
+            batch_losses_items = individual_cross_entropy(pred, segm, keys=keys)
             losses.update(batch_losses_items)
 
             round_loss += sum(batch_losses_items.values())
@@ -77,7 +77,7 @@ def training_round(model, *, dataloader: DataLoader, optimizer: Optimizer, devic
 
             optimizer.zero_grad(set_to_none=True)
             pred = model.forward(scan)
-            loss = train_cross_entropy(segm, pred)
+            loss = train_cross_entropy(pred, segm)
 
             loss.backward()
             optimizer.step()

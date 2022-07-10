@@ -33,7 +33,7 @@ def batch_cross_entropy(input: FloatSegmBatch, target: FloatSegmBatch) -> float:
 
 def individual_cross_entropy(input: FloatSegmBatch, target: FloatSegmBatch, keys: list[int]) -> dict[int, float]:
     items = {
-        k: functional.cross_entropy(input.select_item(i), target.select_item(i)).item()
+        k: functional.cross_entropy(input[i:i+1], target[i:i+1]).item()
         for i, k in enumerate(keys)
     }
     return items

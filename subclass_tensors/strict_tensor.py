@@ -88,8 +88,7 @@ class StrictTensor(Tensor):
         index = list(self.fixed_channels).index(name)
         t = torch.select(self, dim, index)
         t = StrictTensor(t)
-        shape = {name: value for name, value in self.fixed_shape.items() if name != "C"}
-        t.fixed_shape = shape
+        t.fixed_shape = {name: value for name, value in self.fixed_shape.items() if name != "C"}
         t.fixed_dtype = self.fixed_dtype
         t.fixed_channels = ...
         return t
@@ -98,18 +97,16 @@ class StrictTensor(Tensor):
         dim = self.dim("N")
         t = torch.select(self, dim, n)
         t = StrictTensor(t)
-        shape = {name: value for name, value in self.fixed_shape.items() if name != "N"}
-        t.fixed_shape = shape
+        t.fixed_shape = {name: value for name, value in self.fixed_shape.items() if name != "N"}
         t.fixed_dtype = self.fixed_dtype
         t.fixed_channels = ...
         return t
 
     def select_section(self, z: int) -> StrictTensor:
         dim = self.dim("Z")
-        shape = {name: value for name, value in self.fixed_shape.items() if name != "Z"}
         t = torch.select(self, dim, z)
         t = StrictTensor(t)
-        t.fixed_shape = shape
+        t.fixed_shape = {name: value for name, value in self.fixed_shape.items() if name != "Z"}
         t.fixed_dtype = self.fixed_dtype
         t.fixed_channels = self.fixed_channels
         return t

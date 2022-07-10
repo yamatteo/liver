@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import random
+from pathlib import Path
 
+import nibabel
 import torch
 from torch import Tensor
 from torch.nn import functional
@@ -48,18 +50,18 @@ class Scan(StrictTensor):
             b = z
         return a, b
 
-    # @classmethod
-    # def from_float(cls, scan: FloatScan) -> Scan:
-    #     return cls(scan.to(dtype=torch.int16))
-    #
-    # @classmethod
-    # def from_niigz(cls, path: Path) -> Scan:
-    #     return Scan(torch.stack([
-    #         torch.tensor(np.array(nibabel.load(
-    #             path / f"registered_phase_{phase}.nii.gz"
-    #         ).dataobj, dtype=np.int16))
-    #         for phase in ["b", "a", "v", "t"]
-    #     ]))
+    @classmethod
+    def from_float(cls, scan: FloatScan) -> Scan:
+        return cls(scan.to(dtype=torch.int16))
+
+    @classmethod
+    def from_niigz(cls, path: Path) -> Scan:
+        return Scan(torch.stack([
+            torch.tensor(np.array(nibabel.load(
+                path / f"registered_phase_{phase}.nii.gz"
+            ).dataobj, dtype=np.int16))
+            for phase in ["b", "a", "v", "t"]
+        ]))
 
 @tridimensional
 @integer
@@ -70,20 +72,20 @@ class Segm(StrictTensor):
         if torch.min(self) < 0 or torch.max(self) > 2:
             raise ValueError("Segmentation indices can only be 0, 1 or 2.")
 
-    # def get_mask(self, channel: str, z: int) -> Mask:
-    #     channel = ["backg", "liver", "tumor"].index(channel)
-    #     return Mask((self.select_section(z) == channel).to(dtype=torch.int16))
-    #
-    # @classmethod
-    # def from_float(cls, segm: FloatSegm) -> Segm:
-    #     dim = segm.dim("C")
-    #     return cls(torch.argmax(segm, dim=dim).to(dtype=torch.int16))
-    #
-    # @classmethod
-    # def from_niigz(cls, path: Path) -> Segm:
-    #     return Segm(torch.tensor(np.array(nibabel.load(
-    #         path / f"segmentation.nii.gz"
-    #     ).dataobj, dtype=np.int16)))
+    def get_mask(self, channel: str, z: int) -> Mask:
+        channel = ["backg", "liver", "tumor"].index(channel)
+        return Mask((self.select_section(z) == channel).to(dtype=torch.int16))
+
+    @classmethod
+    def from_float(cls, segm: FloatSegm) -> Segm:
+        dim = segm.dim("C")
+        return cls(torch.argmax(segm, dim=dim).to(dtype=torch.int16))
+
+    @classmethod
+    def from_niigz(cls, path: Path) -> Segm:
+        return Segm(torch.tensor(np.array(nibabel.load(
+            path / f"segmentation.nii.gz"
+        ).dataobj, dtype=np.int16)))
 
 
 @channels(["b", "a", "v", "t", "segm"])
@@ -93,23 +95,23 @@ class Bundle(StrictTensor):
     def separate(self) -> tuple[Scan, Segm]:
         return Scan(self[0:4]), Segm(self[4])
 
-    # @classmethod
-    # def from_join(cls, scan: Scan, segm: Segm) -> Bundle:
-    #     if scan.size("Z") != segm.size("Z"):
-    #         raise ValueError("Scan and segm have different lengths along z axis.")
-    #     a, b = scan.boundaries()
-    #     return cls(torch.cat([
-    #         scan[..., a:b],
-    #         segm[..., a:b].unsqueeze(0)
-    #     ], dim=0))
+    @classmethod
+    def from_join(cls, scan: Scan, segm: Segm) -> Bundle:
+        if scan.size("Z") != segm.size("Z"):
+            raise ValueError("Scan and segm have different lengths along z axis.")
+        a, b = scan.boundaries()
+        return cls(torch.cat([
+            scan[..., a:b].torch(),
+            segm[..., a:b].torch().unsqueeze(0)
+        ], dim=0))
 
 
 @channels(["b", "a", "v", "t"])
 @tridimensional
 @floating
 class FloatScan(StrictTensor):
-    # def get_plane(self, phase: str, z: int) -> Slice:
-    #     return Scan.from_float(self).get_plane(phase, z)
+    def get_plane(self, phase: str, z: int) -> Slice:
+        return Scan.from_float(self).get_plane(phase, z)
 
     @classmethod
     def from_int(cls, scan: Scan) -> FloatScan:
@@ -120,8 +122,8 @@ class FloatScan(StrictTensor):
 @tridimensional
 @floating
 class FloatSegm(StrictTensor):
-    # def get_mask(self, channel: str, z: int) -> Mask:
-    #     return Segm.from_float(self).get_mask(channel, z)
+    def get_mask(self, channel: str, z: int) -> Mask:
+        return Segm.from_float(self).get_mask(channel, z)
 
     @classmethod
     def from_int(cls, segm: Segm) -> FloatSegm:
@@ -146,16 +148,14 @@ class FloatBundle(StrictTensor):
 
 @batch
 class FloatScanBatch(FloatScan):
-    pass
-    # def get_plane(self, n: int, phase: str, z: int) -> Slice:
-    #     return self.select_item(n).get_plane(phase, z)
+    def get_plane(self, n: int, phase: str, z: int) -> Slice:
+        return self.select_item(n).get_plane(phase, z)
 
 
 @batch
 class FloatSegmBatch(FloatSegm):
-    pass
-    # def get_mask(self, n: int, channel: str, z: int) -> Mask:
-    #     return self.select_item(n).get_mask(channel, z)
+    def get_mask(self, n: int, channel: str, z: int) -> Mask:
+        return self.select_item(n).get_mask(channel, z)
 
 
 @batch

@@ -149,13 +149,13 @@ class FloatBundle(StrictTensor):
 @batch
 class FloatScanBatch(FloatScan):
     def get_plane(self, n: int, phase: str, z: int) -> Slice:
-        return self.select_item(n).get_plane(phase, z)
+        return FloatScan(self.select_item(n)).get_plane(phase, z)
 
 
 @batch
 class FloatSegmBatch(FloatSegm):
     def get_mask(self, n: int, channel: str, z: int) -> Mask:
-        return self.select_item(n).get_mask(channel, z)
+        return FloatSegm(self.select_item(n)).get_mask(channel, z)
 
 
 @batch

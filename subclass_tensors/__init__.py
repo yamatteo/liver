@@ -157,6 +157,11 @@ class FloatSegmBatch(FloatSegm):
     def get_mask(self, n: int, channel: str, z: int) -> Mask:
         return FloatSegm(self.select_item(n)).get_mask(channel, z)
 
+    def get_slice(self, n: int, z: int) -> Slice:
+        fs = FloatSegm(self.select_item(n))
+        s = Segm.from_float(fs)
+        return Slice(s.select_section(z))
+
 
 @batch
 class FloatBundleBatch(FloatBundle):

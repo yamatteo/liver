@@ -49,17 +49,17 @@ def __sample(scan: FloatScanBatch, pred: FloatSegmBatch, segm: FloatSegmBatch):
         1: "liver",
         2: "tumor"
     }
-    pred_mask = Segm.from_float(pred).get_plane(n=n, z=z).numpy()
-    segm_mask = Segm.from_float(segm).get_plane(n=n, z=z).numpy()
+    pred_slice = pred.get_slice(n, z).numpy()
+    segm_slice = segm.get_slice(n, z).numpy()
 
     return (
         wandb.Image(image, masks={
             "predictions": {
-                "mask_data": pred_mask,
+                "mask_data": pred_slice,
                 "class_labels": class_labels
             },
             "ground_truth": {
-                "mask_data": segm_mask,
+                "mask_data": segm_slice,
                 "class_labels": class_labels
             },
         }),

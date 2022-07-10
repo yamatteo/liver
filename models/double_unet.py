@@ -65,7 +65,7 @@ class UNet(Module):
                 out_channels=final_classes,
                 kernel_size=(1, 1, 1),
             ),
-            nn.Tanh()
+            # nn.Tanh()
         )
 
     def forward(self, x: Tensor) -> FloatSegmBatch:

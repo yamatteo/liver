@@ -42,4 +42,4 @@ def rgb_sample(scan: FloatScanBatch, pred: FloatSegmBatch, segm: FloatSegmBatch,
         ],
         dim=2 if data_format == "HWC" else 0
     )
-    return rgb  # shape is same as `format`
+    return rgb / 255  # shape is same as `format`

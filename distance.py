@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from subclass_tensors import *
 from torch.nn import functional
 

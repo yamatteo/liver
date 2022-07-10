@@ -49,8 +49,8 @@ def __sample(scan: FloatScanBatch, pred: FloatSegmBatch, segm: FloatSegmBatch):
         1: "liver",
         2: "tumor"
     }
-    pred_mask = pred.as_int().get_plane(n=n, z=z).numpy()
-    segm_mask = segm.as_int().get_plane(n=n, z=z).numpy()
+    pred_mask = Segm.from_float(pred).get_plane(n=n, z=z).numpy()
+    segm_mask = Segm.from_float(segm).get_plane(n=n, z=z).numpy()
 
     return (
         wandb.Image(image, masks={

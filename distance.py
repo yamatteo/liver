@@ -27,15 +27,17 @@ from torch.nn import functional
 #     }
 #     return BatchDistance(torch.sum(channel_weights * channel_distances, dim=1)), items
 #
-def batch_cross_entropy(a: FloatSegmBatch, b: FloatSegmBatch) -> float:
-    return functional.cross_entropy(a, b).item()
+def batch_cross_entropy(input: FloatSegmBatch, target: FloatSegmBatch) -> float:
+    return functional.cross_entropy(input, target).item()
 
-def individual_cross_entropy(a: FloatSegmBatch, b: FloatSegmBatch, keys: list[int]) -> dict[int, float]:
+
+def individual_cross_entropy(input: FloatSegmBatch, target: FloatSegmBatch, keys: list[int]) -> dict[int, float]:
     items = {
-        k: functional.cross_entropy(a.select_item(i), b.select_item(i)).item()
+        k: functional.cross_entropy(input.select_item(i), target.select_item(i)).item()
         for i, k in enumerate(keys)
     }
     return items
 
-def train_cross_entropy(a: FloatSegmBatch, b: FloatSegmBatch) -> Tensor:
-    return functional.cross_entropy(a, b)
+
+def train_cross_entropy(input: FloatSegmBatch, target: FloatSegmBatch) -> Tensor:
+    return functional.cross_entropy(input, target)

@@ -31,12 +31,13 @@ def eval_valid_round(model, *, dataset: StoredDataset, batch_size: int, device: 
             segm = segm.to(device=device)
 
             pred = model.forward(scan)
-            round_loss += batch_cross_entropy(pred, segm) * batch_size
+            round_loss += batch_cross_entropy(pred, segm) * segm.size("N")
 
             progress.update(task, advance=batch_size)
-        report.append({"valid_dataset_per_scan_loss": round_loss/len(dataset)})
 
-    return round_loss
+    scan_loss = round_loss / len(dataset)
+    report.append({"valid_dataset_per_scan_loss": scan_loss})
+    return scan_loss
 
 @torch.no_grad()
 def eval_train_round(model, *, dataset: StoredDataset, batch_size: int, device: torch.device, epoch: int, epochs: int):
@@ -59,8 +60,10 @@ def eval_train_round(model, *, dataset: StoredDataset, batch_size: int, device: 
             round_loss += sum(batch_losses_items.values())
 
             progress.update(task, advance=batch_size)
-    report.append({"train_dataset_per_scan_loss": round_loss/len(dataset)})
-    return round_loss, losses
+
+    scan_loss = round_loss / len(dataset)
+    report.append({"train_dataset_per_scan_loss": scan_loss})
+    return scan_loss, losses
 
 
 def training_round(model, *, dataloader: DataLoader, optimizer: Optimizer, device: torch.device, epoch: int, epochs: int):
@@ -82,14 +85,15 @@ def training_round(model, *, dataloader: DataLoader, optimizer: Optimizer, devic
             loss.backward()
             optimizer.step()
 
-            round_loss += loss.item()
+            round_loss += loss.item() * segm.size("N")
             sample, _, _ = report.sample(scan.detach().cpu(), pred.detach().cpu(), segm.detach().cpu())
             # info_items["training_sample"] = sample
-            # report.append(info_items)
+            report.append({"training_sample": sample})
 
             progress.update(task, advance=1)
-    report.append({"focused_per_scan_loss": round_loss/len(dataloader)})
-    return round_loss
+    scan_loss = round_loss / len(dataloader.dataset)
+    report.append({"focused_per_scan_loss": scan_loss})
+    return scan_loss
 
 
 def train_cycle(model, *,
@@ -110,19 +114,19 @@ def train_cycle(model, *,
             losses = {}
             model.eval()
 
-            round_loss = eval_valid_round(model, dataset=valid_dataset, batch_size=batch_size, device=device, epoch=epoch, epochs=epochs)
+            scan_loss = eval_valid_round(model, dataset=valid_dataset, batch_size=batch_size, device=device, epoch=epoch, epochs=epochs)
             console.print(
                 f"Eval epoch {epoch + 1}/{epochs}. "
                 f"Validation dataset. "
-                f"Loss per scan: {round_loss / len(valid_dataset):.2e}"
+                f"Loss per scan: {scan_loss:.2e}"
                 f"".ljust(50, ' ')
             )
 
-            round_loss, losses = eval_train_round(model, dataset=train_dataset, batch_size=batch_size, device=device, epoch=epoch, epochs=epochs)
+            scan_loss, losses = eval_train_round(model, dataset=train_dataset, batch_size=batch_size, device=device, epoch=epoch, epochs=epochs)
             console.print(
                 f"Eval epoch {epoch + 1}/{epochs}. "
                 f"Training dataset. "
-                f"Loss per scan: {round_loss / len(train_dataset):.2e}"
+                f"Loss per scan: {scan_loss:.2e}"
                 f"".ljust(50, ' ')
             )
             # losses = {k: random.random() for k in range(len(train_dataset))}  # For debug
@@ -141,10 +145,10 @@ def train_cycle(model, *,
 
         else:
             model.train()
-            round_loss = training_round(model, dataloader=dataloader, optimizer=optimizer, device=device, epoch=epoch, epochs=epochs)
+            scan_loss = training_round(model, dataloader=dataloader, optimizer=optimizer, device=device, epoch=epoch, epochs=epochs)
             console.print(
                 f"Training epoch {epoch + 1}/{epochs}. "
                 f"Training dataset. "
-                f"Loss per scan: {round_loss / buffer_size:.2e}"
+                f"Loss per scan: {scan_loss:.2e}"
                 f"".ljust(50, ' ')
             )

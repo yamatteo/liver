@@ -69,8 +69,8 @@ class UNet(Module):
         )
 
     def forward(self, x: Tensor) -> FloatSegmBatch:
-        dim = FloatSegmBatch.fixed_shape["C"]
-        return FloatSegmBatch(self.model(x).softmax(dim=dim))
+        # dim = FloatSegmBatch.fixed_shape["C"]
+        return FloatSegmBatch(self.model(x))
 
     # @torch.no_grad()
     # def apply(self, x: FloatScan, thickness: int = 8) -> Segm:

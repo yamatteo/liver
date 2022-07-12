@@ -4,9 +4,11 @@ from pathlib import Path
 from typing import TypeVar
 
 import nibabel
+import torch
 from rich.console import Console
 from torch.utils.data import Dataset, DataLoader
 
+from models.double_unet import UNet, DoubleUNet
 from subclass_tensors import *
 from utils import generators
 
@@ -152,6 +154,38 @@ def store_datasets(*, source_path: Path, target_path: Path, shape: tuple[int, in
             bundle = Bundle.from_join(scan, segm)
 
         for t in generators.slices(bundle, shape):
+            nibabel.save(
+                nibabel.Nifti1Image(
+                    t.numpy(),
+                    affine=np.eye(4)
+                ),
+                (valid_dir if i % 10 == 0 else train_dir) / f"{k:06}.nii.gz",
+            )
+            k += 1
+
+
+def store_finer_datasets(*, source_path: Path, target_path: Path, shape: tuple[int, int, int], model: DoubleUNet, device: torch.device):
+    target_path.mkdir(parents=True, exist_ok=True)
+    train_dir = target_path / "train"
+    valid_dir = target_path / "valid"
+    train_dir.mkdir(exist_ok=True)
+    valid_dir.mkdir(exist_ok=True)
+    k = 0
+    for i, bundle in enumerate(generators.train_bundles(source_path)):
+        print("Loading", i)
+        scan, segm = bundle.separate()
+        float_scan = FloatScan.from_int(scan).to(device=device)
+
+        float_scan = model.down_sampler(float_scan)
+        pred = model.first_net(float_scan.unsqueeze(0))
+        pred = model.up_sampler(pred)
+
+        pred = torch.argmax(pred, dim=1).squeeze(0)
+
+        new_bundle = ExtraBundle(torch.stack([*scan.torch(), pred, segm.torch()]).to(dtype=torch.int16))
+
+        for t in generators.slices(new_bundle, shape):
+            print("Storing", k)
             nibabel.save(
                 nibabel.Nifti1Image(
                     t.numpy(),

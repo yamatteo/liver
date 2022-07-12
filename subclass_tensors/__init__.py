@@ -106,6 +106,24 @@ class Bundle(StrictTensor):
         ], dim=0))
 
 
+@channels(["b", "a", "v", "t", "aid", "segm"])
+@tridimensional
+@integer
+class ExtraBundle(StrictTensor):
+    def separate(self) -> tuple[Scan, Segm, Segm]:
+        return Scan(self[0:4]), Segm(self[4]), Segm(self[5])
+
+    # @classmethod
+    # def from_join(cls, scan: Scan, segm: Segm) -> Bundle:
+    #     if scan.size("Z") != segm.size("Z"):
+    #         raise ValueError("Scan and segm have different lengths along z axis.")
+    #     a, b = scan.boundaries()
+    #     return cls(torch.cat([
+    #         scan[..., a:b].torch(),
+    #         segm[..., a:b].torch().unsqueeze(0)
+    #     ], dim=0))
+
+
 @channels(["b", "a", "v", "t"])
 @tridimensional
 @floating

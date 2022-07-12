@@ -163,7 +163,7 @@ def store_datasets(*, source_path: Path, target_path: Path, shape: tuple[int, in
             )
             k += 1
 
-
+@torch.no_grad()
 def store_finer_datasets(*, source_path: Path, target_path: Path, shape: tuple[int, int, int], model: DoubleUNet, device: torch.device):
     target_path.mkdir(parents=True, exist_ok=True)
     train_dir = target_path / "train"
@@ -187,7 +187,7 @@ def store_finer_datasets(*, source_path: Path, target_path: Path, shape: tuple[i
             print("Storing", k)
             nibabel.save(
                 nibabel.Nifti1Image(
-                    t.numpy(),
+                    t.cpu().numpy(),
                     affine=np.eye(4)
                 ),
                 (valid_dir if i % 10 == 0 else train_dir) / f"{k:06}.nii.gz",

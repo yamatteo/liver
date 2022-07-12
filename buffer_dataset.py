@@ -139,6 +139,30 @@ class StoredDataset(Dataset):
             yield keys, batch
 
 
+class FinerStoredDataset(Dataset):
+    def __init__(self, path: Path):
+        self.files = list(path.iterdir())
+
+    def __len__(self):
+        return len(self.files)
+
+    def __getitem__(self, i: int):
+        path = self.files[i]
+        ndarray = np.array(nibabel.load(path).dataobj, dtype=np.int16)
+        return torch.as_tensor(ndarray)
+
+    def subset(self, keys: list[int]):
+        ds = StoredDataset.__new__(StoredDataset)
+        ds.files = [f for i, f in enumerate(self.files) if i in keys]
+        return ds
+
+    def batches(self, size: int) -> tuple[list[int], FloatBundleBatch]:
+        for i in range(0, len(self.files), size):
+            keys = list(range(i, min(len(self.files), i + size)))
+            batch = torch.stack([self[j] for j in keys])
+            yield keys, batch
+
+
 def store_datasets(*, source_path: Path, target_path: Path, shape: tuple[int, int, int], pooler=None):
     target_path.mkdir(parents=True, exist_ok=True)
     train_dir = target_path / "train"
@@ -184,7 +208,6 @@ def store_finer_datasets(*, source_path: Path, target_path: Path, shape: tuple[i
         new_bundle = ExtraBundle(torch.stack([*scan.torch(), pred, segm.torch()]).to(dtype=torch.int16))
 
         for t in generators.slices(new_bundle, shape):
-            print("Storing", k)
             nibabel.save(
                 nibabel.Nifti1Image(
                     t.cpu().numpy(),
@@ -199,6 +222,13 @@ def get_datasets(path: Path):
     return (
         StoredDataset(path / "train"),
         StoredDataset(path / "valid")
+    )
+
+
+def get_finer_datasets(path: Path):
+    return (
+        FinerStoredDataset(path / "train"),
+        FinerStoredDataset(path / "valid")
     )
 
 

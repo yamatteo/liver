@@ -1,15 +1,13 @@
 import argparse
-import os
 from pathlib import Path
 
 import torch
-import wandb
 from adabelief_pytorch import AdaBelief
 
 import report
-from buffer_dataset import store_datasets, get_datasets
-from models.double_unet import DoubleUNet, pool_layer
-from train import train_cycle
+from buffer_dataset import get_finer_datasets
+from finer_train import train_cycle
+from models.double_unet import DoubleUNet
 
 run = report.init(project="liver-tumor-detecton", entity="yamatteo", backend="none", level="debug")
 
@@ -17,7 +15,6 @@ run = report.init(project="liver-tumor-detecton", entity="yamatteo", backend="no
 # report.debug("Loaded enviromental variables:", dict(dotenv.dotenv_values()))
 data_path = Path("/home/yamatteo/storage/hepato_outputs")
 dataset_path = Path("/home/yamatteo/storage/dataset")
-coarse_dataset_path = Path("/home/yamatteo/storage/coarse_dataset")
 models_path = Path("/home/yamatteo/storage/liver/saved_models")
 
 opts = argparse.Namespace(
@@ -47,9 +44,8 @@ report.info(f"Running on {device}")
 # store_datasets(source_path=data_path, target_path=coarse_dataset_path, pooler=pool_layer("avg441"), shape=(128, 128, 8))
 
 model = DoubleUNet()
-model.first_net.load_state_dict(torch.load(models_path / opts.coarse_model))
+model.first_net.load_state_dict(torch.load(models_path / opts.coarse_model, map_location=device))
 report.info(f"coarse model loaded from {models_path / opts.coarse_model}")
-
 
 if opts.resume is False:
     report.info("Starting with a new model.")
@@ -65,9 +61,9 @@ else:
     model.second_net.load_state_dict(torch.load(models_path / model_name))
     report.info(f"Model loaded from {models_path / model_name}")
 
-# COARSE training
+# FINER training
 with report.status("Loading dataset..."):
-    train_dataset, valid_dataset = get_datasets(dataset_path)
+    train_dataset, valid_dataset = get_finer_datasets(dataset_path)
     report.info(f"Training dataset: {len(train_dataset)} items.")
     report.info(f"Validation dataset: {len(valid_dataset)} items.")
 

@@ -1,19 +1,10 @@
 import argparse
-import os
 from pathlib import Path
 
-import dotenv
-import nibabel
-import numpy as np
 import torch
-from rich.console import Console
-
-from models.double_unet import DoubleUNet
-from wrapped_tensors import Scan, Segm, Bundle
-from utils.path_explorer import discover, get_criterion
-
 
 from buffer_dataset import store_finer_datasets
+from models.double_unet import DoubleUNet
 
 data_path = Path("/home/yamatteo/storage/hepato_outputs")
 dataset_path = Path("/home/yamatteo/storage/dataset")

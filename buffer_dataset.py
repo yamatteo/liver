@@ -172,8 +172,7 @@ def store_finer_datasets(*, source_path: Path, target_path: Path, shape: tuple[i
     valid_dir.mkdir(exist_ok=True)
     k = 0
     for i, bundle in enumerate(generators.train_bundles(source_path)):
-        print("Loading", i)
-        scan, segm = bundle.separate()
+        scan, segm = bundle.to(device=device).separate()
         float_scan = FloatScan.from_int(scan).to(device=device)
 
         float_scan = model.down_sampler(float_scan)

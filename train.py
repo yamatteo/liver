@@ -131,8 +131,9 @@ def train_cycle(model, *,
             )
             # losses = {k: random.random() for k in range(len(train_dataset))}  # For debug
 
-            largest = heapq.nlargest(int(buffer_size*1.1), list(losses.keys()), lambda k: losses[k])
-            reasonable = heapq.nsmallest(buffer_size, largest, lambda k: losses[k])
+            # largest = heapq.nlargest(int(buffer_size*1.1), list(losses.keys()), lambda k: losses[k])
+            # reasonable = heapq.nsmallest(buffer_size, largest, lambda k: losses[k])
+            reasonable = heapq.nlargest(buffer_size, list(losses.keys()), lambda k: losses[k])
             sub_dataset = train_dataset.subset(reasonable)
             dataloader = DataLoader(
                 sub_dataset,

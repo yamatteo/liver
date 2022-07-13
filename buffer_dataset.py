@@ -141,7 +141,7 @@ class StoredDataset(Dataset):
 
 class FinerStoredDataset(Dataset):
     def __init__(self, path: Path):
-        self.files = list(path.iterdir())
+        self.files = list(path.iterdir())[:800]
 
     def __len__(self):
         return len(self.files)
@@ -152,7 +152,7 @@ class FinerStoredDataset(Dataset):
         return torch.as_tensor(ndarray)
 
     def subset(self, keys: list[int]):
-        ds = StoredDataset.__new__(StoredDataset)
+        ds = FinerStoredDataset.__new__(FinerStoredDataset)
         ds.files = [f for i, f in enumerate(self.files) if i in keys]
         return ds
 

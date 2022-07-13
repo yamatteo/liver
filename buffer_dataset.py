@@ -141,7 +141,7 @@ class StoredDataset(Dataset):
 
 class FinerStoredDataset(Dataset):
     def __init__(self, path: Path):
-        self.files = list(path.iterdir())[:800]
+        self.files = list(path.iterdir())
 
     def __len__(self):
         return len(self.files)

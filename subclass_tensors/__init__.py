@@ -180,6 +180,12 @@ class FloatSegmBatch(FloatSegm):
         s = Segm.from_float(fs)
         return Slice(s.select_section(z))
 
+    @classmethod
+    def from_int(cls, segm: Segm) -> FloatSegmBatch:
+        print("PRESHAPE:", segm.shape)
+        x = cls(functional.one_hot(segm.to(dtype=torch.int64), 3).permute(0, 4, 1, 2, 3).float())
+        print("POSTSHAPE:", x.shape)
+        return x
 
 @batch
 class FloatBundleBatch(FloatBundle):

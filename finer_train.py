@@ -144,7 +144,7 @@ def train_cycle(model, *,
                 sub_dataset,
                 pin_memory=True,
                 batch_size=batch_size,
-                collate_fn=lambda l: FloatBundleBatch(torch.stack(l))
+                # collate_fn=lambda l: FloatBundleBatch(torch.stack(l))
             )
             torch.save(model.state_dict(), models_path / "last_checkpoint.pth")
             torch.save(model.state_dict(), models_path / f"checkpoint{epoch:03}.pth")

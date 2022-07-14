@@ -91,17 +91,15 @@ def training_round(model, *, dataloader: DataLoader, optimizer: Optimizer, devic
             optimizer.step()
 
             round_loss += loss.item() * segm.size(0)
-            sample, _, _ = report.sample(
-                FloatScanBatch(scan).detach().cpu(),
-                FloatSegmBatch(pred).detach().cpu(),
-                FloatSegmBatch.from_int(segm).detach().cpu()
-            )
-            # info_items["training_sample"] = sample
-            report.append({"training_sample": sample})
 
             progress.update(task, advance=1)
+    sample, _, _ = report.sample(
+        FloatScanBatch(scan).detach().cpu(),
+        FloatSegmBatch(pred).detach().cpu(),
+        FloatSegmBatch.from_int(segm).detach().cpu()
+    )
     scan_loss = round_loss / len(dataloader.dataset)
-    report.append({"focused_per_scan_loss": scan_loss})
+    report.append({"focused_per_scan_loss": scan_loss, "training_sample": sample})
     return scan_loss
 
 

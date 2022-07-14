@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from . import *
+from utils.path_explorer import iter_dicom, iter_original, iter_trainable
 
 
 class TestPathExplorerIterators(unittest.TestCase):
@@ -36,8 +36,8 @@ class TestPathExplorerIterators(unittest.TestCase):
         set_b = {Path(f"Mock{n:03}") for n in range(12) if n % 3 == 0}
         self.assertSetEqual(set_a, set_b)
 
-    def test_iter_iterable(self):
+    def test_iter_trainable(self):
         base = Path(self.base_dir.name)
-        set_a = set(iter_iterable(base))
+        set_a = set(iter_trainable(base))
         set_b = {Path(f"Mock{n:03}") for n in range(12) if n % 4 == 0}
         self.assertSetEqual(set_a, set_b)

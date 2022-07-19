@@ -1,6 +1,7 @@
 import argparse
 import tempfile
 import unittest
+import warnings
 from pathlib import Path
 
 from scripts import dicom2nifti, register_phases
@@ -22,7 +23,10 @@ class TestPreprocessing(unittest.TestCase):
                 outputs=target,
                 overwrite=False
             )
-            dicom2nifti.main(opts)
+            try:
+                dicom2nifti.main(opts)
+            except ValueError as err:
+                raise ValueError("Is libgdcm-tools installed?") from err
             self.assertEqual(len(list(iter_original(target))), N)
 
             opts = argparse.Namespace(
@@ -31,6 +35,7 @@ class TestPreprocessing(unittest.TestCase):
                 outputs=target,
                 overwrite=False
             )
+            self.assertTrue(Path("/usr/local/bin/reg_f3d").exists())
             register_phases.main(opts)
             for case in iter_original(target):
                 (target / case / "segmentation.nii.gz").touch()

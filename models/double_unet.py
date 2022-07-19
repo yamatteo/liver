@@ -72,6 +72,16 @@ class UNet(Module):
         # dim = FloatSegmBatch.fixed_shape["C"]
         return FloatSegmBatch(self.model(x))
 
+    def block_forward(self, x: Tensor):
+        # Assuming x is shape [N, PH+KL, X, Y, Z]
+        pieces = []
+        next_x = x
+        while next_x.size(4) > 15:
+            current_x, next_x = next_x[..., 0:8], next_x[..., 8:]
+            pieces.append(self.model(current_x))
+        pieces.append(self.model(next_x))
+        return FloatSegmBatch(torch.cat(pieces, dim=4))
+
     # @torch.no_grad()
     # def apply(self, x: FloatScan, thickness: int = 8) -> Segm:
     #     shape = (3, x.size("H"), x.size("W"), x.size("D"))

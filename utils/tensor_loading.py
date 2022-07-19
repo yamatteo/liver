@@ -17,4 +17,4 @@ def load_scan(case_path: Path) -> tuple[tuple[int, int, int], np.ndarray, FloatS
     ]))
     a, b = scan.boundaries()
 
-    return (a, b, scan.size(3)), affine, scan[..., a:b].as_float()
+    return (a, b, scan.size(3)), affine, scan[..., a:b]

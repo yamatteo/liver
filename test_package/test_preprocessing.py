@@ -5,7 +5,7 @@ import warnings
 from pathlib import Path
 
 from scripts import dicom2nifti, register_phases
-from utils.path_explorer import iter_dicom, iter_original, iter_trainable
+from dataset.path_explorer import iter_dicom, iter_original, iter_trainable
 
 
 class TestPreprocessing(unittest.TestCase):

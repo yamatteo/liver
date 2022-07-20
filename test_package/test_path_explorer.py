@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from utils.path_explorer import iter_dicom, iter_original, iter_trainable
+from dataset.path_explorer import iter_dicom, iter_original, iter_trainable
 
 
 class TestPathExplorerIterators(unittest.TestCase):

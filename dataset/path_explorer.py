@@ -8,21 +8,12 @@ from rich.console import Console
 console = Console()
 
 
-def discover(path: Path | str, select_dir: Callable) -> list[Path]:
-    """Recursively list dirs in `path` that respect `select_dir` criterion."""
-    path = Path(path).resolve()
-    unexplored_paths = [path]
-    selected_paths = []
-    while len(unexplored_paths) > 0:
-        new_path = unexplored_paths.pop(0)
-        if select_dir(new_path):
-            selected_paths.append(new_path.resolve().relative_to(path))
-        elif new_path.is_dir():
-            unexplored_paths.extend(new_path.iterdir())
-    return selected_paths
-
-
 ### Criteria
+def is_anything(path: Path) -> bool:
+    """True if path contains something related to this project."""
+    return is_dicom(path) or is_original(path) or is_trainable(path)
+
+
 def is_dicom(path: Path) -> bool:
     """True if path contains DICOMDIR."""
     if not path.is_dir():
@@ -69,6 +60,19 @@ def iter_trainable(path: Path) -> Iterator[Path]:
     yield from discover(path, is_trainable)
 
 
+### Discover utility
+def discover(path: Path | str, select_dir: Callable = is_anything) -> list[Path]:
+    """Recursively list dirs in `path` that respect `select_dir` criterion."""
+    path = Path(path).resolve()
+    unexplored_paths = [path]
+    selected_paths = []
+    while len(unexplored_paths) > 0:
+        new_path = unexplored_paths.pop(0)
+        if select_dir(new_path):
+            selected_paths.append(new_path.resolve().relative_to(path))
+        elif new_path.is_dir():
+            unexplored_paths.extend(new_path.iterdir())
+    return selected_paths
 
 # def get_criterion(
 #         dicom: bool = False,

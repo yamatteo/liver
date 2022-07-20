@@ -1,0 +1,13 @@
+dicom2nifti==2.3.0
+nibabel==3.2.2
+SimpleITK==2.0.2
+
+adabelief-pytorch
+numpy
+pyelastix
+pyradiomics
+rich
+seaborn
+seaborn_image
+torch
+wandb

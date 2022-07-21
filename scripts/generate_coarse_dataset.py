@@ -2,7 +2,6 @@ import argparse
 import os
 from pathlib import Path
 
-import nibabel
 import numpy as np
 from rich.console import Console
 from torch import nn

@@ -9,18 +9,18 @@ from dataset.slices import overlapping_slices, fixed_shape_slices
 
 class TestSlicing(unittest.TestCase):
     def test_overlapping_slices(self):
-        t = np.ndarray([4, 4, 4])
+        t = np.random.rand(*[4, 4, 4])
         l = list(overlapping_slices(t, 8, 1))
         self.assertEqual(len(l), 1)
         self.assertTrue(np.all(l[0] == t))
 
-        t = np.ndarray([4, 512, 512, 89])
+        t = np.random.rand(*[4, 512, 512, 89])
         l = list(overlapping_slices(t, 8, 3))
         self.assertEqual(len(l), 12)
         self.assertTrue(np.all(l[0] == t[:, :, :, 0:8]))
 
     def test_fixed_shape_slices(self):
-        t = np.ndarray([15, 4, 8, 10, 18])
+        t = np.random.rand(*[15, 4, 8, 10, 18])
         shape = (10, 10, 10)
         dims = (2, 3, 4)
         l = list(fixed_shape_slices(t, shape, dims))

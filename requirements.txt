@@ -6,6 +6,7 @@ adabelief-pytorch
 numpy
 pyelastix
 pyradiomics
+pytest
 rich
 seaborn
 seaborn_image

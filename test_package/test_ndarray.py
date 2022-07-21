@@ -48,7 +48,7 @@ class TestNdarrayIO(unittest.TestCase):
             for phase in ["b", "a", "t"]:
                 regs[phase] = data[..., bottom:top] + (10*np.random.rand(*data[..., bottom:top].shape)).astype(np.int16)
 
-            ndarray.save_regs(regs, path=tmp_path, affine=matrix, bottom=bottom, top=top, height=height)
+            ndarray.save_registereds(regs, path=tmp_path, affine=matrix, bottom=bottom, top=top, height=height)
             ndarray.save_scan(regs, path=tmp_path, affine=matrix, bottom=bottom, top=top, height=height)
 
             _data, _matrix = ndarray.load_registered(tmp_path, phase='a')

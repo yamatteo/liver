@@ -22,7 +22,7 @@ def load_original(path: Path, phase: str) -> tuple[np.ndarray, np.ndarray]:
     return data, matrix
 
 
-def save_regs(regs: dict[str, np.ndarray], path: Path, affine: np.ndarray, bottom: int, top: int, height: int):
+def save_registereds(regs: dict[str, np.ndarray], path: Path, affine: np.ndarray, bottom: int, top: int, height: int):
     # regs is a dictionary {phase: ndarray} of length 4
     # each ndarray is [512, 512, z] and is already cropped (i.e. z = top-bottom)
     for phase, data in regs.items():

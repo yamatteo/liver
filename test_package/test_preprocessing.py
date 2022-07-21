@@ -4,8 +4,10 @@ import pytest
 import unittest
 from pathlib import Path
 
-from scripts import dicom2nifti, register_phases
-from dataset.path_explorer import iter_dicom, iter_original, iter_trainable
+import scripts.dicom2nifti
+import scripts.niftyreg
+import scripts.pyelastix
+from dataset.path_explorer import iter_dicom, iter_original, iter_registered
 
 
 @pytest.mark.skipif(not (Path(__file__).parent / "sources").exists(), reason="requires test_package/sources")
@@ -21,30 +23,41 @@ class TestPreprocessing(unittest.TestCase):
     def test_conversion(self):
         source = Path(__file__).parent / "sources"
         target = self.tmp_path
-        N = len(list(iter_dicom(source)))
-        self.assertNotEqual(N, 0)
-        self.assertEqual(len(list(iter_original(target))), 0)
-        self.assertEqual(len(list(iter_trainable(target))), 0)
+        self.assertNotEqual(list(iter_dicom(source)), [])
 
         opts = argparse.Namespace(
             sources=source,
             outputs=target,
             overwrite=False
         )
-        dicom2nifti.main(opts)
-        self.assertEqual(len(list(iter_original(target))), N)
+        completed = scripts.dicom2nifti.main(opts)
+        self.assertEqual(completed, list(iter_dicom(source)))
 
     @pytest.mark.skipif(not Path("/usr/local/bin/reg_f3d").exists(), reason="requires nifty-reg")
-    def test_preprocessing(self):
+    def test_niftyreg(self):
+        source = Path(__file__).parent / "sources"
         target = self.tmp_path
+        self.assertNotEqual(list(iter_original(source)), [])
         opts = argparse.Namespace(
             niftybin="/usr/local/bin",
-            sources=target,
+            sources=source,
             outputs=target,
-            overwrite=False
+            overwrite=True
         )
-        N = len(list(iter_original(target)))
-        register_phases.main(opts)
-        for case in iter_original(target):
-            (target / case / "segmentation.nii.gz").touch()
-        self.assertEqual(len(list(iter_trainable(target))), N)
+        completed = scripts.niftyreg.main(opts)
+        self.assertEqual(completed, list(iter_original(source)))
+
+    @pytest.mark.skipif(not Path("/usr/bin/elastix").exists(), reason="requires elastix")
+    def test_pyelastix(self):
+        source = Path(__file__).parent / "sources"
+        target = self.tmp_path
+        self.assertNotEqual(list(iter_original(source)), [])
+
+        opts = argparse.Namespace(
+            sources=source,
+            outputs=target,
+            overwrite=True
+        )
+
+        completed = scripts.pyelastix.main(opts)
+        self.assertEqual(completed, list(iter_original(source)))

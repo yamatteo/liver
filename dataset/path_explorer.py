@@ -33,6 +33,17 @@ def is_original(path: Path) -> bool:
     )
 
 
+def is_registered(path: Path) -> bool:
+    """True if path contains registered nifti scans."""
+    if not path.is_dir():
+        return False
+    files = [file_path.name for file_path in path.iterdir()]
+    return all(
+        f"registered_phase_{phase}.nii.gz" in files
+        for phase in ["b", "a", "v", "t"]
+    )
+
+
 def is_trainable(path: Path) -> bool:
     """True if path contains segmentation and registered nifti scans."""
     if not path.is_dir():
@@ -51,12 +62,17 @@ def iter_dicom(path: Path) -> Iterator[Path]:
 
 
 def iter_original(path: Path) -> Iterator[Path]:
-    """Iterates over subfolders contaning original nifti scans."""
+    """Iterates over subfolders containing original nifti scans."""
+    yield from discover(path, is_original)
+
+
+def iter_registered(path: Path) -> Iterator[Path]:
+    """Iterates over subfolders containing registered nifti scans."""
     yield from discover(path, is_original)
 
 
 def iter_trainable(path: Path) -> Iterator[Path]:
-    """Iterates over subfolders contaning original nifti scans."""
+    """Iterates over subfolders containing original nifti scans."""
     yield from discover(path, is_trainable)
 
 

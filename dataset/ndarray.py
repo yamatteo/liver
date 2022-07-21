@@ -23,6 +23,8 @@ def load_original(path: Path, phase: str) -> tuple[np.ndarray, np.ndarray]:
 
 
 def save_regs(regs: dict[str, np.ndarray], path: Path, affine: np.ndarray, bottom: int, top: int, height: int):
+    # regs is a dictionary {phase: ndarray} of length 4
+    # each ndarray is [512, 512, z] and is already cropped (i.e. z = top-bottom)
     for phase, data in regs.items():
         _data = np.full([data.shape[0], data.shape[1], height], fill_value=-1024, dtype=np.int16)
         _data[..., bottom:top] = data
@@ -40,6 +42,8 @@ def load_registered(path: Path, phase: str) -> tuple[np.ndarray, np.ndarray]:
 
 
 def save_scan(regs: dict[str, np.ndarray], path: Path, affine: np.ndarray, bottom: int, top: int, height: int):
+    # regs is a dictionary {phase: ndarray} of length 4
+    # each ndarray is [512, 512, z] and is already cropped (i.e. z = top-bottom)
     scan = np.stack([regs["b"], regs["a"], regs["v"], regs["t"]], axis=0)
     image = nibabel.Nifti1Image(scan, np.eye(4))
     nibabel.save(image, path / f"scan.nii.gz")

@@ -5,7 +5,7 @@ from rich.console import Console
 
 from dataset.path_explorer import iter_dicom, iter_original
 from .dicom_conversion import process_dicomdir
-from .registration import register_case
+from .niftyreg import register_case
 
 console = Console()
 

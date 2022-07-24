@@ -11,6 +11,7 @@ from dataset import ndarray
 
 
 class TestNdarrayIO(unittest.TestCase):
+    print("Here we are")
     def test_ndarray(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_path = Path(tmp_dir)

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 import tempfile
 import pytest
@@ -21,9 +23,9 @@ class TestPreprocessing(unittest.TestCase):
 
     @pytest.mark.skipif(not Path("/usr/bin/gdcmconv").exists(), reason="requires libgdcm-tools")
     def test_conversion(self):
-        source = Path(__file__).parent / "sources"
+        self.assertNotEqual(list(iter_dicom(Path(__file__).parent / "sources")), [])
+        source = Path(__file__).parent / "sources" / list(iter_dicom(Path(__file__).parent / "sources"))[0]
         target = self.tmp_path
-        self.assertNotEqual(list(iter_dicom(source)), [])
 
         opts = argparse.Namespace(
             sources=source,
@@ -31,7 +33,7 @@ class TestPreprocessing(unittest.TestCase):
             overwrite=False
         )
         completed = scripts.dicom2nifti.main(opts)
-        self.assertEqual(completed, list(iter_dicom(source)))
+        self.assertEqual(completed, [source])
 
     @pytest.mark.skipif(not Path("/usr/local/bin/reg_f3d").exists(), reason="requires nifty-reg")
     def test_niftyreg(self):

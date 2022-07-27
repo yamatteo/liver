@@ -56,6 +56,11 @@ def load_scan(path: Path) -> np.ndarray:
     return np.array(image.dataobj, dtype=np.int16)
 
 
+def load_segm(path: Path) -> np.ndarray:
+    image = nibabel.load(path / f"segmentation.nii.gz")
+    return np.array(image.dataobj, dtype=np.int16)
+
+
 def load_registration_data(path: Path) -> tuple[np.ndarray, int, int, int]:
     with open(path / "registration_data.pickle", "rb") as f:
         d = pickle.load(f)

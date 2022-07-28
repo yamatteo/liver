@@ -21,7 +21,7 @@ def main(opts):
         )
         if opts.overwrite or not target_path_is_complete:
             target_path.mkdir(parents=True, exist_ok=True)
-            console.print(f"[bold black]{case_path.name}.[/bold black] Registering with pyelastix...")
+            console.print(f"[bold black]{case_path}.[/bold black] Registering with pyelastix...")
             regs, matrix, bottom, top, height = preprocessing.pyelastix.regs_dict_from(source_path)
             dataset.ndarray.save_registereds(
                 regs,

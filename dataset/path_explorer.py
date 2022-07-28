@@ -44,6 +44,14 @@ def is_registered(path: Path) -> bool:
     )
 
 
+def is_predicted(path: Path) -> bool:
+    """True if path contains prediction."""
+    if not path.is_dir():
+        return False
+    files = [file_path.name for file_path in path.iterdir()]
+    return "prediction.nii.gz" in files
+
+
 def is_trainable(path: Path) -> bool:
     """True if path contains segmentation and registered nifti scans."""
     if not path.is_dir():

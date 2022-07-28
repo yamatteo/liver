@@ -1,12 +1,11 @@
 import argparse
 
-import matplotlib.pyplot as plt
-import numpy as np
-from ipywidgets import Text, Output, Tab, HBox, VBox, HTML, Layout, Dropdown, Button, IntSlider
+from ipywidgets import Text, Tab, HBox, VBox, HTML, Layout, Dropdown, Button
 
 import april_model
 import dataset.ndarray
 import dataset.path_explorer
+import july_model
 import scripts.dicom2nifti
 import scripts.niftyreg
 import scripts.pyelastix
@@ -235,6 +234,35 @@ def get_new_interface():
         with console.new_card():
             april_model.eval_one_folder(state.case_path)
             
+    button__july = Button(layout=Layout(width='auto'))
+
+    @inject(button__july, except_to="---")
+    def description(case, case_path):
+        if dataset.path_explorer.is_registered(case_path):
+            if dataset.path_explorer.is_predicted(case_path):
+                return f"Predict {str(case)} with JULY's model (overwrite!)"
+            else:
+                return f"Predict {str(case)} with JULY's model"
+        else:
+            return f"{case} is not registered."
+
+    @inject(button__july, except_to=True)
+    def disabled(case_path):
+        if dataset.path_explorer.is_registered(case_path):
+            return False
+        return True
+
+    @inject(button__july, except_to="info")
+    def button_style(case_path):
+        if dataset.path_explorer.is_registered(case_path) and dataset.path_explorer.is_predicted(case_path):
+            return "warning"
+        return "info"
+
+    @button__july.on_click
+    def callback(*args, **kwargs):
+        with console.new_card():
+            july_model.eval_one_folder(state.case_path)
+            
     new_tab(
         tab, "Segmentation",
         HBox([
@@ -242,6 +270,7 @@ def get_new_interface():
                 HTML("<h3>Single case operations</h3>"),
                 case_dropdown,
                 button__april,
+                button__july,
                 HTML("<h3>Operations on the whole dataset</h3>"),
 
             ]),

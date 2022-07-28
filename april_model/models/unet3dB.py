@@ -4,7 +4,7 @@ from typing import Callable
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+import torch.nn.functional as functional
 from torch import Tensor
 from torch.nn import Module
 from torch.utils.checkpoint import checkpoint_sequential
@@ -107,7 +107,7 @@ class UNet3dLayer(nn.Module):
                 y = self.block(x)
                 z = self.unpool(self.submodule(self.pool(y)))
                 zpad = y.size(4) - z.size(4)
-                z = F.pad(z, [0, zpad])
+                z = functional.pad(z, [0, zpad])
                 return self.upconv(torch.cat([y, z], dim=1))
         else:
             def forward(x):
@@ -128,7 +128,8 @@ class UNet3d(nn.Module):
             down_normalization: Module | None = None,
             down_dropout: Module | None = nn.Dropout3d(0.5, True),
             bottom_activation: Module | None = nn.ReLU(True),
-            bottom_normalization: Callable[[int], Module] | None = lambda n: nn.BatchNorm3d(n, momentum=0.9, affine=False),
+            bottom_normalization: Callable[[int], Module] | None = lambda n: nn.BatchNorm3d(n, momentum=0.9,
+                                                                                            affine=False),
             bottom_dropout: Module | None = None,
             up_activation: Module | None = nn.ReLU(True),
             up_normalization: Module | None = None,

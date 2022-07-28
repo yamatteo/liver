@@ -61,7 +61,7 @@ def eval_all_folders(path: Path):
             )
 
         else:
-            console.print(f"[bold black]{case_path.name}.[/bold black] is already complete, skipping.")
+            console.print(f"[bold black]{case_path}.[/bold black] is already complete, skipping.")
 
 
 def eval_one_folder(path: Path):

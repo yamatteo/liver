@@ -4,10 +4,10 @@ from typing import Callable
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as functional
 from torch import Tensor
 from torch.nn import Module
 from torch.utils.checkpoint import checkpoint_sequential
-import torch.nn.functional as F
 
 
 class Funnel(nn.Module):
@@ -30,6 +30,7 @@ class Funnel(nn.Module):
         y1 = self.conv(self.pad(x[:, processed_channels])).squeeze(-1)
         y2 = x[:, self.bypass, :, :, self.kernel_size // 2]
         return torch.cat([y1, y2], dim=1)
+
 
 class Block(nn.Module):
     def __init__(
@@ -128,7 +129,7 @@ class UNetLayer(nn.Module):
                 y = self.block(x)
                 z = self.unpool(self.submodule(self.pool(y)))
                 zpad = y.size(-1) - z.size(-1)
-                z = F.pad(z, [0, zpad])
+                z = functional.pad(z, [0, zpad])
                 return self.upconv(torch.cat([y, z], dim=1))
         else:
             def forward(x):
@@ -174,23 +175,23 @@ class FunneledUNet(nn.Module):
         )
 
         self.body = UNetLayer(
-                channels[1:],
-                complexity=complexity,
-                down_activation=down_activation,
-                down_normalization=down_normalization,
-                down_dropout=down_dropout,
-                bottom_activation=bottom_activation,
-                bottom_normalization=bottom_normalization,
-                bottom_dropout=bottom_dropout,
-                up_activation=up_activation,
-                up_normalization=up_normalization,
-                up_dropout=up_dropout,
-                checkpointing=checkpointing,
-            )
+            channels[1:],
+            complexity=complexity,
+            down_activation=down_activation,
+            down_normalization=down_normalization,
+            down_dropout=down_dropout,
+            bottom_activation=bottom_activation,
+            bottom_normalization=bottom_normalization,
+            bottom_dropout=bottom_dropout,
+            up_activation=up_activation,
+            up_normalization=up_normalization,
+            up_dropout=up_dropout,
+            checkpointing=checkpointing,
+        )
 
         self.head = nn.Sequential(
             nn.Conv2d(
-                in_channels=channels[2]+len(fullbypass),
+                in_channels=channels[2] + len(fullbypass),
                 out_channels=final_classes,
                 kernel_size=(1, 1),
             ),
@@ -200,7 +201,7 @@ class FunneledUNet(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         if self.clamp:
             x = torch.clamp(x, *self.clamp)
-        bx = x[:, self.fullbypass, :, :, self.wafer_size//2]
+        bx = x[:, self.fullbypass, :, :, self.wafer_size // 2]
         x = self.funnel(x)
         x = self.body(x)
         return self.head(torch.cat([x, bx], dim=1))

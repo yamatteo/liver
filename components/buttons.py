@@ -1,5 +1,7 @@
 from ipywidgets import Button, Layout
 from rich.console import Console
+
+import april_model
 import dataset.path_explorer as px
 
 from preprocessing import process_dicomdir
@@ -14,6 +16,19 @@ class ButtonGenerator:
     convert_all = Button(layout=Layout(width='auto'))
     register = Button(layout=Layout(width='auto'))
     register_all = Button(layout=Layout(width='auto'))
+
+    april_one = Button(
+        description="Apply april's model",
+        layout=Layout(width='auto')
+    )
+    april_all = Button(
+        description="Apply april's model to all",
+        layout=Layout(width='auto')
+    )
+    april_evaluate = Button(
+        description="Evaluate april's model",
+        layout=Layout(width='auto')
+    )
 
     def __init__(self, state, output_console):
         _, inject, _, _ = reactions.state_reactions(state)
@@ -157,4 +172,24 @@ class ButtonGenerator:
                         console.print(f"   {' ' * len(target_path.name)}  ...completed.")
                     else:
                         console.print(f"  [bold black]{target_path.name}.[/bold black] is already complete, skipping.")
+
+        @self.april_one.on_click
+        def callback(event):
+            case_path = state.case_path
+            with output_console.new_card():
+                april_model.apply_to_one_folder(case_path)
+
+
+        @self.april_all.on_click
+        def callback(*args, **kwargs):
+            base_path = state.base_path
+            with output_console.new_card():
+                april_model.apply_to_all_folders(base_path)
+
+        @self.april_evaluate.on_click
+        def callback(event):
+            base_path = state.base_path
+            with output_console.new_card():
+                april_model.evaluate(base_path)
+
 

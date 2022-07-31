@@ -236,7 +236,7 @@ def get_new_interface():
     @button__april.on_click
     def callback(*args, **kwargs):
         with console.new_card():
-            april_model.eval_one_folder(state.case_path)
+            april_model.apply_to_one_folder(state.case_path)
             
     button__july = Button(layout=Layout(width='auto'))
 
@@ -273,10 +273,11 @@ def get_new_interface():
             VBox([
                 HTML("<h3>Single case operations</h3>"),
                 case_dropdown,
-                button__april,
+                buttons.april_one,
                 button__july,
                 HTML("<h3>Operations on the whole dataset</h3>"),
-
+                buttons.april_all,
+                buttons.april_evaluate,
             ]),
             VBox([
                 console

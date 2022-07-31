@@ -3,6 +3,7 @@ from rich.console import Console
 
 import april_model
 import dataset.path_explorer as px
+import july_model
 
 from preprocessing import process_dicomdir
 from . import reactions
@@ -27,6 +28,19 @@ class ButtonGenerator:
     )
     april_evaluate = Button(
         description="Evaluate april's model",
+        layout=Layout(width='auto')
+    )
+
+    july_one = Button(
+        description="Apply july's model",
+        layout=Layout(width='auto')
+    )
+    july_all = Button(
+        description="Apply july's model to all",
+        layout=Layout(width='auto')
+    )
+    july_evaluate = Button(
+        description="Evaluate july's model",
         layout=Layout(width='auto')
     )
 
@@ -153,17 +167,11 @@ class ButtonGenerator:
                 console.print(f"[bold orange3]Registering:[/bold orange3]")
                 for case_path in px.iter_original(base_path):
                     target_path = base_path / case_path
-                    print(target_path, list(target_path.iterdir()))
-                    print("@pickle", (target_path / "registration_data.pickle").exists())
-                    print("phases", [
-                            (target_path / f"registered_phase_{phase}.nii.gz").exists()
-                            for phase in ["b", "a", "v", "t"]
-                    ])
                     target_path_is_complete = (
-                        (target_path / "registration_data.pickle").exists()
-                        and all(
-                            (target_path / f"registered_phase_{phase}.nii.gz").exists()
-                            for phase in ["b", "a", "v", "t"]
+                            (target_path / "registration_data.pickle").exists()
+                            and all(
+                        (target_path / f"registered_phase_{phase}.nii.gz").exists()
+                        for phase in ["b", "a", "v", "t"]
                     ))
                     if not target_path_is_complete:
                         target_path.mkdir(parents=True, exist_ok=True)
@@ -179,7 +187,6 @@ class ButtonGenerator:
             with output_console.new_card():
                 april_model.apply_to_one_folder(case_path)
 
-
         @self.april_all.on_click
         def callback(*args, **kwargs):
             base_path = state.base_path
@@ -192,4 +199,20 @@ class ButtonGenerator:
             with output_console.new_card():
                 april_model.evaluate(base_path)
 
+        @self.july_one.on_click
+        def callback(event):
+            case_path = state.case_path
+            with output_console.new_card():
+                july_model.predict_one_folder(case_path)
 
+        @self.july_all.on_click
+        def callback(*args, **kwargs):
+            base_path = state.base_path
+            with output_console.new_card():
+                july_model.predict_all_folders(base_path)
+
+        @self.july_evaluate.on_click
+        def callback(event):
+            base_path = state.base_path
+            with output_console.new_card():
+                july_model.evaluate_all_folders(base_path)

@@ -265,19 +265,22 @@ def get_new_interface():
     @button__july.on_click
     def callback(*args, **kwargs):
         with console.new_card():
-            july_model.eval_one_folder(state.case_path)
+            july_model.predict_one_folder(state.case_path)
             
     new_tab(
         tab, "Segmentation",
         HBox([
             VBox([
-                HTML("<h3>Single case operations</h3>"),
+                HTML("<h4>Single case operations</h4>"),
                 case_dropdown,
                 buttons.april_one,
-                button__july,
-                HTML("<h3>Operations on the whole dataset</h3>"),
+                buttons.july_one,
+                HTML("<h4>Operations on the whole dataset</h4>"),
                 buttons.april_all,
+                buttons.july_all,
+                HTML("<h4>Evaluation</h4>"),
                 buttons.april_evaluate,
+                buttons.july_evaluate,
             ]),
             VBox([
                 console

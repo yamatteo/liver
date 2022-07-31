@@ -30,7 +30,7 @@ def setup_model():
 def predict_case(model, case_path):
     (a, b, original_d_size), affine_matrix, scan = load_scan(case_path)
 
-    scan = FloatScan.from_int(scan).unsqueeze(0).to(device=device)
+    scan = scan.unsqueeze(0).to(dtype=torch.float32, device=device)
     dg_scan = model.down_sampler(scan)
     dg_pred = model.first_net.forward(dg_scan)
     dg_pred = model.up_sampler(dg_pred)
@@ -49,11 +49,10 @@ def predict_case(model, case_path):
     )
 
 def eval_one_folder(case_path):
-
-    console.print("[bold orange3]Segmenting...[/bold orange3]")
+    console.print(f"[bold orange3]Segmenting:[/bold orange3] {case_path.stem}...")
     model = setup_model()
     predict_case(model, case_path)
-    console.print(f"[bold black]{case_path}:[/bold black] completed.")
+    console.print(f"            ...completed.")
 
 def eval_all_folders(path: Path):
     console.print("[bold orange3]Segmenting:[/bold orange3]")
@@ -63,5 +62,6 @@ def eval_all_folders(path: Path):
         if (case_path / "prediction.nii.gz").exists():
             console.print(f" [bold black]{case_path}[/bold black] is already complete, skipping.")
         else:
+            console.print(f"  [bold black]{case_path}.[/bold black] Predicting...")
             predict_case(model, case_path)
-            console.print(f"  [bold black]{case_path}:[/bold black] completed.")
+            console.print(f"  {' ' * len(str(case_path))}  ...completed.")

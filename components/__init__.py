@@ -9,6 +9,7 @@ import july_model
 import scripts.dicom2nifti
 import scripts.niftyreg
 import scripts.pyelastix
+from .buttons import ButtonGenerator
 from .card_console import Console
 from .commonstate import get_new_state
 from .visualization import build_tv
@@ -21,6 +22,8 @@ def new_tab(tab, title, widget):
 
 def get_new_interface():
     state, react, inject, project, biject = get_new_state()
+    console = Console(layout=Layout(max_height="10cm"))
+    buttons = ButtonGenerator(state, console)
     tab = Tab()
 
     ######################################################## Setup ########################################################
@@ -28,7 +31,6 @@ def get_new_interface():
     drive_folder_input = Text(description="Drive folder:")
     biject("drive_folder", drive_folder_input)
 
-    console = Console(layout=Layout(max_height="10cm"))
 
 
     @react
@@ -67,43 +69,43 @@ def get_new_interface():
 
     biject("case", case_dropdown, except_to=None)
 
-    button__convert = Button(layout=Layout(width='auto'))
-
-
-    @inject(button__convert, except_to="---")
-    def description(case, case_path):
-        if dataset.path_explorer.is_dicom(case_path):
-            if dataset.path_explorer.is_original(case_path):
-                return f"Convert only {str(case)} (overwrite!)"
-            else:
-                return f"Convert only {str(case)}"
-        else:
-            return f"Can't convert {case} because it is not a dicomdir."
-
-
-    @inject(button__convert, except_to=True)
-    def disabled(case_path):
-        if dataset.path_explorer.is_dicom(case_path):
-            return False
-        return True
-
-
-    @inject(button__convert, except_to="info")
-    def button_style(case_path):
-        if dataset.path_explorer.is_dicom(case_path) and dataset.path_explorer.is_original(case_path):
-            return "warning"
-        return "info"
-
-
-    @button__convert.on_click
-    def callback(*args, **kwargs):
-        opts = argparse.Namespace(
-            sources=state.case_path,
-            outputs=state.case_path,
-            overwrite=True
-        )
-        with console.new_card():
-            scripts.dicom2nifti.main(opts)
+    # button__convert = Button(layout=Layout(width='auto'))
+    #
+    #
+    # @inject(button__convert, except_to="---")
+    # def description(case, case_path):
+    #     if dataset.path_explorer.is_dicom(case_path):
+    #         if dataset.path_explorer.is_original(case_path):
+    #             return f"Convert only {str(case)} (overwrite!)"
+    #         else:
+    #             return f"Convert only {str(case)}"
+    #     else:
+    #         return f"Can't convert {case} because it is not a dicomdir."
+    #
+    #
+    # @inject(button__convert, except_to=True)
+    # def disabled(case_path):
+    #     if dataset.path_explorer.is_dicom(case_path):
+    #         return False
+    #     return True
+    #
+    #
+    # @inject(button__convert, except_to="info")
+    # def button_style(case_path):
+    #     if dataset.path_explorer.is_dicom(case_path) and dataset.path_explorer.is_original(case_path):
+    #         return "warning"
+    #     return "info"
+    #
+    #
+    # @button__convert.on_click
+    # def callback(*args, **kwargs):
+    #     opts = argparse.Namespace(
+    #         sources=state.case_path,
+    #         outputs=state.case_path,
+    #         overwrite=True
+    #     )
+    #     with console.new_card():
+    #         scripts.dicom2nifti.main(opts)
 
 
     button__niftyreg = Button(layout=Layout(width='auto'))
@@ -191,10 +193,12 @@ def get_new_interface():
             VBox([
                 HTML("<h3>Single case operations</h3>"),
                 case_dropdown,
-                button__convert,
-                button__niftyreg,
-                button__pyelastix,
+                buttons.convert,
+                # button__niftyreg,
+                buttons.register,
                 HTML("<h3>Operations on the whole dataset</h3>"),
+                buttons.convert_all,
+                buttons.register_all,
 
             ]),
             VBox([
@@ -299,3 +303,7 @@ def get_new_interface():
     )
 
     return state, tab
+
+
+# Cite
+# ITK-SNAP  # Paul A. Yushkevich, Joseph Piven, Heather Cody Hazlett, Rachel Gimpel Smith, Sean Ho, James C. Gee, and Guido Gerig. User-guided 3D active contour segmentation of anatomical structures: Significantly improved efficiency and reliability. Neuroimage. 2006 Jul 1; 31(3):1116-28.

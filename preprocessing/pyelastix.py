@@ -9,7 +9,8 @@ import scipy.ndimage
 import dataset.ndarray
 
 
-def move_image(input: np.ndarray, input_matrix: np.ndarray, target: np.ndarray, target_matrix: np.ndarray) -> tuple[np.ndarray, int, int]:
+def move_image(input: np.ndarray, input_matrix: np.ndarray, target: np.ndarray, target_matrix: np.ndarray) -> tuple[
+    np.ndarray, int, int]:
     """Perform affine transformations so that input uses the same homogeneous coordinates as target.
 
     Usually x and y coordinates don't change that much, and the body is well in the middle of the 512x512
@@ -70,20 +71,25 @@ def regs_dict_from(path: Path) -> tuple[dict[str, np.ndarray], np.ndarray, int, 
     return regs, matrix, bottom, top, height
 
 
-def registration_callback(event, path, overwrite):
-    from dataset.path_explorer import iter_original
-    if path is None:
-        for case in iter_original(base_path):
-            registration_callback(event, path=base_path / case, overwrite=False)
-    else:
-        source_path = target_path = path
-        target_path_is_complete = all(
-            (target_path / f"registered_phase_{phase}.nii.gz").exists()
-            for phase in ["b", "a", "v", "t"]
-        )
-        if target_path_is_complete and not overwrite:
-            console.print(f"[bold black]{case_path.name}.[/bold black] is already complete, skipping.")
-        else:
-            console.print(f"[bold black]{case_path.name}.[/bold black] registering images...")
-            target_path.mkdir(parents=True, exist_ok=True)
-            register_case(path)
+def register_case(path):
+    regs, matrix, bottom, top, height = regs_dict_from(path)
+    dataset.ndarray.save_registereds(regs, path=path, affine=matrix, bottom=bottom, top=top, height=height)
+
+
+# def registration_callback(event, path, overwrite):
+#     from dataset.path_explorer import iter_original
+#     if path is None:
+#         for case in iter_original(base_path):
+#             registration_callback(event, path=base_path / case, overwrite=False)
+#     else:
+#         source_path = target_path = path
+#         target_path_is_complete = all(
+#             (target_path / f"registered_phase_{phase}.nii.gz").exists()
+#             for phase in ["b", "a", "v", "t"]
+#         )
+#         if target_path_is_complete and not overwrite:
+#             console.print(f"[bold black]{case_path.name}.[/bold black] is already complete, skipping.")
+#         else:
+#             console.print(f"[bold black]{case_path.name}.[/bold black] registering images...")
+#             target_path.mkdir(parents=True, exist_ok=True)
+#             register_case(path)

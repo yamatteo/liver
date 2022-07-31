@@ -47,7 +47,7 @@ def get_info(filename: str) -> Tuple[Optional[int], Optional[str]]:
 def process_dicomdir(source_path: Path, target_path: Path):
     """Convert scans in `source_path` from dicom to nifti."""
     case_name = source_path.name
-    console.print(f"[bold black]{case_name}.[/bold black] Converting dicom to nifti...")
+
     with TemporaryDirectory() as tempdir:
         temp_path = Path(tempdir)
 

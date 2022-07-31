@@ -1,15 +1,7 @@
 import inspect
 from typing import Union, Tuple
 
-from ipywidgets import Button
-from traitlets import HasTraits, TraitError
-
-trait_ref = Union[
-    Tuple[str, HasTraits, str],
-    Tuple[HasTraits, str],
-    Tuple[HasTraits, str, str],
-    Tuple[HasTraits, str, str, str],
-]
+from traitlets import HasTraits
 
 
 def reaction(source: HasTraits, execute=False):
@@ -45,5 +37,19 @@ def injection(source: HasTraits, widget: HasTraits, source_traits=None, widget_t
 
     return _injection_decorator
 
-def onclick(button: Button):
-    return button.on_click
+
+def state_reactions(state: HasTraits):
+    react = reaction(state)
+
+    def inject(widget: HasTraits, except_to=None):
+        return injection(source=state, widget=widget, except_to=except_to)
+
+    def project(widget: HasTraits, except_to=None):
+        return injection(source=widget, widget=state, except_to=except_to)
+
+    def biject(state_trait: str, widget: HasTraits, widget_trait: str = "value", except_to=None):
+        f = lambda x: x
+        injection(state, widget, (state_trait,), widget_trait, except_to=except_to)(f)
+        injection(widget, state, (widget_trait,), state_trait, except_to=except_to)(f)
+
+    return react, inject, project, biject

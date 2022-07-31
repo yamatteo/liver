@@ -96,4 +96,5 @@ def discover(path: Path | str, select_dir: Callable = is_anything) -> list[Path]
             selected_paths.append(new_path.resolve().relative_to(path))
         elif new_path.is_dir():
             unexplored_paths.extend(new_path.iterdir())
+    selected_paths.sort()
     return selected_paths

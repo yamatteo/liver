@@ -108,16 +108,6 @@ def evaluate(base_path: Path):
         case_in="  [bold black]{case}.[/bold black] Evaluating...",
         case_out="  ...completed.",
     )(evaluate)
-    # for case_path in px.iter_trainable(base_path):
-    #     source_path = base_path / case_path
-    #     console.print(f"  [bold black]{case_path}.[/bold black] Evaluating...")
-    #     pred = apply(case_path=source_path, net882=net882, net=net, device=device)
-    #     segm = torch.tensor(nd.load_segm(source_path))
-    #     evaluations[str(case_path)] = {
-    #         "liver": liverscore(pred, segm),
-    #         "tumor": tumorscore(pred, segm)
-    #     }
-    #     console.print(f"  {' ' * len(str(case_path))}  ...completed.")
     with open("april_evaluation.pickle", "wb") as f:
         pickle.dump(evaluations, f)
     console.print("Mean liver score:", sum(item["liver"] for item in evaluations.values()) / len(evaluations))

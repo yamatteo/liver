@@ -45,6 +45,7 @@ def store_dataset(source_path: Path, target_path: Path, pooler=None, slice_shape
         segm = nd.load_segm(case_path)
         affine, bottom, top, height = nd.load_registration_data(case_path)
         bundle = np.stack([*registered_scans, segm])[..., bottom:top]
+        bundle = np.clip(bundle, a_min=-1024, a_max=1024)
         if pooler:
             bundle = torch.tensor(bundle)
             bundle = pooler(bundle)

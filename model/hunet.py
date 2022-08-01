@@ -6,13 +6,14 @@ import torch
 from adabelief_pytorch import AdaBelief
 from rich.console import Console
 from rich.progress import Progress
-from torch.nn import Module, functional
 from torch.utils.data import DataLoader
 
+import report
 from .block import *
 from .data import Dataset
 
 console = Console()
+
 
 class HalfUNet(Module):
     def __init__(
@@ -38,8 +39,18 @@ class HalfUNet(Module):
         self.unpooler0 = nn.Upsample(scale_factor=(32, 32, 8), mode='trilinear')
 
     def forward(self, x: Tensor) -> Tensor:
-        # x.shape is [N, 4, 512, 512, Z]
+        # x.shape is [N, 4, 512, 512, 40]
         return self.unpooler0(self.unblock0(self.block0(self.pooler0(x))))
+
+    def resume(self, models_path: Path, model_name="last_checkpoint.pth", device=torch.device("cpu")):
+        try:
+            self.load_state_dict(torch.load(models_path / model_name, map_location=device))
+            console.print(f"Model loaded from {models_path / model_name}")
+        except FileNotFoundError:
+            console.print(f"Model {models_path / model_name} does not exist. Starting with a new model.")
+
+    def save(self, models_path: Path, model_name="last_checkpoint.pth"):
+        torch.save(self.state_dict(), models_path / model_name)
 
 
 class HunetNetwork:
@@ -49,6 +60,7 @@ class HunetNetwork:
                 "scan": torch.tensor(array[0:4], dtype=torch.float32, device=device),
                 "segm": torch.tensor(array[4], dtype=torch.int64, device=device)
             }
+
         self.train_dataset = Dataset(dataset_path / "train", format)
         self.valid_dataset = Dataset(dataset_path / "valid", format)
         self.tdl = DataLoader(
@@ -79,6 +91,7 @@ class HunetNetwork:
     @torch.no_grad()
     def evaluation_round(self, epoch: int, epochs: int):
         round_loss = 0
+        samples = []
         with Progress(transient=True) as progress:
             task = progress.add_task(
                 f"Eval epoch {epoch + 1}/{epochs}.".ljust(50, ' '),
@@ -90,17 +103,17 @@ class HunetNetwork:
                 batch_size = segm.size(0)
 
                 pred = self.net.forward(scan)
-                print("loss?", pred.shape, segm.shape)
                 round_loss += self.loss_function(pred, segm).item() * batch_size
+                samples.append(report.sample(scan.detach().cpu(), pred.detach().cpu(), segm.detach().cpu()))
 
                 progress.update(task, advance=batch_size)
 
         scan_loss = round_loss / len(self.valid_dataset)
-        return scan_loss
+        return scan_loss, samples
 
     def training_round(self, epoch: int, epochs: int):
         round_loss = 0
-        # samples = []
+        samples = []
         with Progress(transient=True) as progress:
             task = progress.add_task(
                 f"Training epoch {epoch + 1}/{epochs}.".ljust(50, ' '),
@@ -118,29 +131,37 @@ class HunetNetwork:
                 loss.backward()
                 self.optimizer.step()
                 round_loss += loss.item() * batch_size
-                # sample, _, _ = report.sample(scan.detach().cpu(), pred.detach().cpu(), segm.detach().cpu())
-                # report.append({"training_sample": sample})
+                samples.append(report.sample(scan.detach().cpu(), pred.detach().cpu(), segm.detach().cpu()))
 
                 progress.update(task, advance=batch_size)
 
         scan_loss = round_loss / len(self.train_dataset)
-        return scan_loss  #, samples
+        return scan_loss, samples
 
-    def train(self, epochs: int = 400):
-        for epoch in range(epochs):
-            if epoch % 20 == 0:
-                self.net.eval()
-                scan_loss = self.evaluation_round(epoch, epochs)
-                console.print(
-                    f"Evaluation epoch {epoch + 1}/{epochs}. "
-                    f"Loss per scan: {scan_loss:.2e}"
-                    f"".ljust(50, ' ')
-                )
-            else:
-                self.net.train()
-                scan_loss = self.training_round(epoch, epochs)
-                console.print(
-                    f"Training epoch {epoch + 1}/{epochs}. "
-                    f"Loss per scan: {scan_loss:.2e}"
-                    f"".ljust(50, ' ')
-                )
+    def train(self, *, epochs: int = 400, models_path: Path):
+        run = report.init(project="liver-tumor-detection", entity="yamatteo", backend="wandb", level="debug")
+        try:
+            for epoch in range(epochs):
+                if epoch % 20 == 0:
+                    self.net.eval()
+                    scan_loss, samples = self.evaluation_round(epoch, epochs)
+                    console.print(
+                        f"Evaluation epoch {epoch + 1}/{epochs}. "
+                        f"Loss per scan: {scan_loss:.2e}"
+                        f"".ljust(50, ' ')
+                    )
+                    report.append({"valid_epoch_loss": scan_loss, "samples": samples})
+                    self.net.save(models_path, "last_checkpoint.pth")
+                    self.net.save(models_path, f"checkpoint{epoch:03}.pth")
+                else:
+                    self.net.train()
+                    scan_loss, samples = self.training_round(epoch, epochs)
+                    console.print(
+                        f"Training epoch {epoch + 1}/{epochs}. "
+                        f"Loss per scan: {scan_loss:.2e}"
+                        f"".ljust(50, ' ')
+                    )
+                    report.append({"train_epoch_loss": scan_loss, "samples": samples})
+        except:
+            run.finish()
+            console.print_exception()

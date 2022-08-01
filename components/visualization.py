@@ -3,6 +3,8 @@ import seaborn
 import seaborn_image
 from ipywidgets import Dropdown, IntSlider, Output
 from matplotlib import pyplot as plt
+from torch.nn.functional import l1_loss
+
 import dataset.ndarray
 
 
@@ -13,6 +15,10 @@ def build_tv(state, inject, project, biject):
         value=None,
         options=[
             ("Rgb scan", ("rgb",)),
+            ("Segmentation", ("segm",)),
+            ("Prediction", ("pred",)),
+            ("LiverError", ("lerr",)),
+            ("TumorError", ("terr",)),
             ("Check registration phase b", ("rcheck", "b")),
             ("Check registration phase a", ("rcheck", "a")),
             ("Check registration phase t", ("rcheck", "t")),
@@ -24,7 +30,6 @@ def build_tv(state, inject, project, biject):
             ("Registered phase a", ("reg", "a")),
             ("Registered phase v", ("reg", "v")),
             ("Registered phase t", ("reg", "t")),
-            ("Segmentation", ("segm",))
         ]
     )
     z_slider = IntSlider(description="Z slice:")
@@ -48,6 +53,12 @@ def build_tv(state, inject, project, biject):
                 content = load_rgbscan(state.case_path)
             elif command == "segm":
                 content = load_segm(state.case_path)
+            elif command == "pred":
+                content = load_segm(state.case_path, "prediction")
+            elif command == "lerr":
+                content = load_error(state.case_path, 1)
+            elif command == "terr":
+                content = load_error(state.case_path, 2)
             z_slider.max = content.shape[-1] - 1
         except:
             content = None
@@ -116,13 +127,28 @@ def load_rgbscan(case_path):
     return np.stack([red, green, blue])  # shape is [RGB, X, Y, Z]
 
 
-def load_segm(case_path):
+def load_segm(case_path, what: str = "segmentation"):
     white = dataset.ndarray.load_registered(case_path, phase="v")
     segm = dataset.ndarray.load_segm(case_path)
     assert white.shape[2] == segm.shape[2], "Segmentation and registered phase v have different height"
     white = white.clip(0, 255) / 255
     red = (segm == 1).astype(float)
     green = (segm == 2).astype(float)
+    blue = np.zeros_like(segm)
+    red = (white + red).clip(0, 1)
+    green = (white + green).clip(0, 1)
+    blue = (white + blue).clip(0, 1)
+    return np.stack([red, green, blue])  # shape is [RGB, X, Y, Z]
+
+
+def load_error(case_path, klass: int):
+    white = dataset.ndarray.load_registered(case_path, phase="v")
+    segm = dataset.ndarray.load_segm(case_path)
+    pred = dataset.ndarray.load_segm(case_path, "prediction")
+    assert white.shape[2] == segm.shape[2], "Segmentation and registered phase v have different height"
+    white = white.clip(0, 255) / 255
+    red = l1_loss((segm == klass).astype(float), (pred == klass).astype(float))
+    green = (segm == klass).astype(float)
     blue = np.zeros_like(segm)
     red = (white + red).clip(0, 1)
     green = (white + green).clip(0, 1)

@@ -69,8 +69,8 @@ def load_scan(path: Path) -> np.ndarray:
     return np.array(image.dataobj, dtype=np.int16)
 
 
-def load_segm(path: Path) -> np.ndarray:
-    image = nibabel.load(path / f"segmentation.nii.gz")
+def load_segm(path: Path, what: str = "segmentation") -> np.ndarray:
+    image = nibabel.load(path / f"{what}.nii.gz")
     data = np.array(image.dataobj, dtype=np.int16)
     assert np.all(data < 3), "segmentation has indices above 2"
     return data

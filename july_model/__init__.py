@@ -5,7 +5,6 @@ import nibabel
 import torch
 from rich.console import Console
 
-from dataset.path_explorer import iter_registered
 import dataset.ndarray as nd
 import dataset.path_explorer as px
 from distances import liverscore, tumorscore
@@ -14,10 +13,10 @@ from .models.double_unet import DoubleUNet
 from .tensor_loading import load_scan
 
 console = Console()
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 saved_models = Path(__file__).parent / "saved_models"
 
 def setup_model():
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = DoubleUNet()
     model.first_net.load_state_dict(torch.load(saved_models / "coarse400.pth", map_location=device))
     model.first_net.eval()
@@ -27,11 +26,11 @@ def setup_model():
     model.second_net.to(device=device)
     model.up_sampler.to(device=device)
     model.down_sampler.to(device=device)
-    return model
+    return model, device
 
 
 @torch.no_grad()
-def predict_case(model, case_path):
+def predict_case(model, case_path, device):
     (a, b, original_d_size), affine_matrix, scan = load_scan(case_path)
 
     scan = scan.unsqueeze(0).to(dtype=torch.float32, device=device)
@@ -54,7 +53,7 @@ def predict_case(model, case_path):
 
 
 @torch.no_grad()
-def evaluate_case(model, case_path):
+def evaluate_case(model, case_path, device):
     (a, b, original_d_size), affine_matrix, scan = load_scan(case_path)
 
     scan = scan.unsqueeze(0).to(dtype=torch.float32, device=device)
@@ -71,32 +70,36 @@ def evaluate_case(model, case_path):
     }
 
 def predict_one_folder(case_path):
+    model, device = setup_model()
+    console.print(f'Using device {device}')
     console.print(f"[bold orange3]Segmenting:[/bold orange3] {case_path.stem}...")
-    model = setup_model()
-    predict_case(model, case_path)
+    predict_case(model, case_path, device)
     console.print(f"            ...completed.")
 
 def predict_all_folders(path: Path):
+    model, device = setup_model()
+    console.print(f'Using device {device}')
     console.print("[bold orange3]Segmenting:[/bold orange3]")
-    model = setup_model()
-    for case in iter_registered(path):
-        case_path = path / case
-        if (case_path / "prediction.nii.gz").exists():
-            console.print(f" [bold black]{case_path}[/bold black] is already complete, skipping.")
-        else:
-            console.print(f"  [bold black]{case_path}.[/bold black] Predicting...")
-            predict_case(model, case_path)
-            console.print(f"  {' ' * len(str(case_path))}  ...completed.")
+    predict = lambda case_path: predict_case(model, case_path, device)
+    select = lambda p: px.is_registered(p) and not px.is_predicted(p)
+    px.recurse(
+        path,
+        select,
+        case_in="  [bold black]{case}.[/bold black] Predicting...",
+        case_out="  ...completed."
+    )(predict)
 
 def evaluate_all_folders(base_path: Path):
+    model, device = setup_model()
+    console.print(f'Using device {device}')
     console.print("[bold orange3]Evaluating:[/bold orange3]")
-    model = setup_model()
-    evaluations = {}
-    for case_path in px.iter_trainable(base_path):
-        source_path = base_path / case_path
-        console.print(f"  [bold black]{case_path}.[/bold black] Evaluating...")
-        evaluations[str(case_path)] = evaluate_case(model, source_path)
-        console.print(f"  {' ' * len(str(case_path))}  ...completed.")
+    evaluate = lambda case_path: evaluate_case(model, case_path, device)
+    evaluations = px.recurse(
+        base_path,
+        px.is_trainable,
+        case_in="  [bold black]{case}.[/bold black] Evaluating...",
+        case_out="  ...completed.",
+    )(evaluate)
     with open("july_evaluation.pickle", "wb") as f:
         pickle.dump(evaluations, f)
     console.print("Mean liver score:", sum(item["liver"] for item in evaluations.values()) / len(evaluations))

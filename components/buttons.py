@@ -4,6 +4,7 @@ from rich.console import Console
 import april_model
 import dataset.path_explorer as px
 import july_model
+import model as newmodel
 
 from preprocessing import process_dicomdir
 from . import reactions
@@ -41,6 +42,19 @@ class ButtonGenerator:
     )
     july_evaluate = Button(
         description="Evaluate july's model",
+        layout=Layout(width='auto')
+    )
+
+    newmodel_one = Button(
+        description="Apply newmodel",
+        layout=Layout(width='auto')
+    )
+    newmodel_all = Button(
+        description="Apply newmodel to all",
+        layout=Layout(width='auto')
+    )
+    newmodel_evaluate = Button(
+        description="Evaluate newmodel",
         layout=Layout(width='auto')
     )
 
@@ -216,3 +230,21 @@ class ButtonGenerator:
             base_path = state.base_path
             with output_console.new_card():
                 july_model.evaluate_all_folders(base_path)
+
+        @self.newmodel_one.on_click
+        def callback(event):
+            case_path = state.case_path
+            with output_console.new_card():
+                newmodel.predict_one_folder(case_path)
+
+        @self.newmodel_all.on_click
+        def callback(*args, **kwargs):
+            base_path = state.base_path
+            with output_console.new_card():
+                newmodel.predict_all_folders(base_path)
+
+        @self.newmodel_evaluate.on_click
+        def callback(event):
+            base_path = state.base_path
+            with output_console.new_card():
+                newmodel.evaluate_all_folders(base_path)

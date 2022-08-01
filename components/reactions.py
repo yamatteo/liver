@@ -1,5 +1,4 @@
 import inspect
-from typing import Union, Tuple
 
 from traitlets import HasTraits
 

@@ -52,7 +52,7 @@ class TestNdarrayIO(unittest.TestCase):
             ndarray.save_registereds(regs, path=tmp_path, affine=matrix, bottom=bottom, top=top, height=height)
             ndarray.save_scan(regs, path=tmp_path, affine=matrix, bottom=bottom, top=top, height=height)
 
-            _data, _matrix = ndarray.load_registered(tmp_path, phase='a')
+            _data, _matrix = ndarray.load_registered_with_matrix(tmp_path, phase='a')
             self.assertIsInstance(_data, np.ndarray)
             self.assertIsInstance(_matrix, np.ndarray)
             self.assertEqual(_data.shape, (512, 512, 64))

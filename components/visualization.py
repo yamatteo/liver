@@ -80,7 +80,7 @@ def load_original(case_path, phase):
 
 
 def load_regcheck(case_path, phase):
-    reg, _ = dataset.ndarray.load_registered(case_path, phase=phase)
+    reg = dataset.ndarray.load_registered(case_path, phase=phase)
     orig, _ = dataset.ndarray.load_original(case_path, phase=phase)
     origv, _ = dataset.ndarray.load_original(case_path, phase="v")
     # shapes are [X, Y, Z], possibly different Z for orig and origv
@@ -95,17 +95,17 @@ def load_regcheck(case_path, phase):
 
 
 def load_registered(case_path, phase):
-    data, _ = dataset.ndarray.load_registered(case_path, phase=phase)
+    data = dataset.ndarray.load_registered(case_path, phase=phase)
     # orig.shape is [X, Y, Z]
     data = data.clip(0, 255) / 255
     return np.stack([data, data, data])  # shape is [RGB, X, Y, Z]
 
 
 def load_rgbscan(case_path):
-    white, _ = dataset.ndarray.load_registered(case_path, phase="b")
-    red, _ = dataset.ndarray.load_registered(case_path, phase="a")
-    green, _ = dataset.ndarray.load_registered(case_path, phase="v")
-    blue, _ = dataset.ndarray.load_registered(case_path, phase="t")
+    white = dataset.ndarray.load_registered(case_path, phase="b")
+    red = dataset.ndarray.load_registered(case_path, phase="a")
+    green = dataset.ndarray.load_registered(case_path, phase="v")
+    blue = dataset.ndarray.load_registered(case_path, phase="t")
     white = white.clip(0, 255) / 255
     red = red.clip(0, 255) / 255
     green = green.clip(0, 255) / 255
@@ -117,7 +117,7 @@ def load_rgbscan(case_path):
 
 
 def load_segm(case_path):
-    white, _ = dataset.ndarray.load_registered(case_path, phase="v")
+    white = dataset.ndarray.load_registered(case_path, phase="v")
     segm = dataset.ndarray.load_segm(case_path)
     assert white.shape[2] == segm.shape[2], "Segmentation and registered phase v have different height"
     white = white.clip(0, 255) / 255

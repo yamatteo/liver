@@ -101,7 +101,7 @@ def evaluate_case(case_path: Path, net882, net, device):
 def evaluate(base_path: Path):
     net, net882, device = eval_setup()
     console.print("[bold orange3]Evaluating:[/bold orange3]")
-    evaluate = lambda p: evaluate_case(p, net882, net, device)
+    evaluate = lambda case_path: evaluate_case(case_path, net882, net, device)
     evaluations = px.recurse(
         base_path,
         px.is_trainable,
@@ -129,7 +129,7 @@ def apply_to_all_folders(path: Path):
 
     console.print(f'Using device {device}')
     console.print("[bold orange3]Segmenting:[/bold orange3]")
-    predict = lambda p: predict_case(p, net882, net, device)
+    predict = lambda case_path: predict_case(case_path, net882, net, device)
     select = lambda p: px.is_registered(p) and not px.is_predicted(p)
     px.recurse(
         path,

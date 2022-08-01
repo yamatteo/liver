@@ -95,7 +95,7 @@ def evaluate_all_folders(base_path: Path):
     for case_path in px.iter_trainable(base_path):
         source_path = base_path / case_path
         console.print(f"  [bold black]{case_path}.[/bold black] Evaluating...")
-        evaluations[str(case_path)] = evaluate_case(model, case_path)
+        evaluations[str(case_path)] = evaluate_case(model, source_path)
         console.print(f"  {' ' * len(str(case_path))}  ...completed.")
     with open("july_evaluation.pickle", "wb") as f:
         pickle.dump(evaluations, f)

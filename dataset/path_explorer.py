@@ -98,3 +98,25 @@ def discover(path: Path | str, select_dir: Callable = is_anything) -> list[Path]
             unexplored_paths.extend(new_path.iterdir())
     selected_paths.sort()
     return selected_paths
+
+
+def recurse(base_path: Path, select_dir: Callable = is_anything, **kwargs):
+    opening = kwargs.get("opening", None)
+    case_in = kwargs.get("case_in", None)
+    case_out = kwargs.get("case_out", None)
+
+    def _recurse(func):
+        if opening:
+            console.print(opening)
+        returns = {}
+        for case in discover(base_path, select_dir):
+            if case_in:
+                console.print(case_in.format(case=case))
+            ret = func(case_path=base_path / case)
+            if ret:
+                returns[case] = ret
+            if case_out:
+                console.print(case_out.format(case=case))
+        return returns
+
+    return _recurse

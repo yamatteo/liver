@@ -3,11 +3,13 @@ from pathlib import Path
 import numpy as np
 import torch
 import torch.utils.data
+from rich.console import Console
 
 import dataset.ndarray as nd
 import dataset.path_explorer as px
 from dataset.slices import fixed_shape_slices
 
+console = Console()
 
 class Dataset(torch.utils.data.Dataset):
     def __init__(self, path: Path, format=torch.tensor):
@@ -26,7 +28,15 @@ class Dataset(torch.utils.data.Dataset):
 
 def store_dataset(source_path: Path, target_path: Path, pooler=None, slice_shape=None):
     i, k = 0, 0
+    console.print("Storing dataset:")
+    console.print("  source_path =", source_path)
+    console.print("  target_path =", target_path)
+    console.print("  pooler =", pooler)
+    console.print(f"  slice_shape = {slice_shape}")
+    (target_path / "train").mkdir(exist_ok=True)
+    (target_path / "valid").mkdir(exist_ok=True)
     for case in px.iter_trainable(source_path):
+        console.print("  ...working on:", case)
         case_path = source_path / case
         registered_scans = [
             nd.load_registered(case_path, phase)
@@ -41,6 +51,8 @@ def store_dataset(source_path: Path, target_path: Path, pooler=None, slice_shape
             bundle = bundle.numpy()
         if slice_shape:
             for slice in fixed_shape_slices(bundle, slice_shape, dims=(1, 2, 3)):
+                if tuple(slice.shape[-3:]) != slice_shape:
+                    print("wrong shape in", case, "->", slice.shape)
                 if k % 10 == 0:
                     nd.save_niftiimage(target_path / "valid" / f"{i:06}.nii.gz", slice)
                 else:

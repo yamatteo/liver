@@ -49,6 +49,7 @@ class Block(Module):
             in_channels: int,
             out_channels: int,
             complexity: int = 2,
+            kernel_size: tuple[int, int, int] = (3, 3, 3),
             padding: tuple[int, int, int] = (0, 0, 0),
             actv: str = "relu",
             norm: str = "",
@@ -57,16 +58,24 @@ class Block(Module):
             transpose: bool = False
     ):
         super().__init__()
-        self.repr = f"Block({'>'.join([str(in_channels), *([str(out_channels)] * complexity)])}" \
-                    f"{'>' + actv if actv else ''}" \
-                    f"{'>' + norm if norm else ''}" \
-                    f"{'>' + drop if drop else ''}" \
-                    f")"
+        if transpose:
+            self.repr = f"Block({'<'.join([*([str(in_channels)] * complexity), str(out_channels)])}" \
+                        f"{', ' + actv if actv else ''}" \
+                        f"{', ' + norm if norm else ''}" \
+                        f"{', ' + drop if drop else ''}" \
+                        f")"
+        else:
+            self.repr = f"Block({'>'.join([str(in_channels), *([str(out_channels)] * complexity)])}" \
+                        f"{', ' + actv if actv else ''}" \
+                        f"{', ' + norm if norm else ''}" \
+                        f"{', ' + drop if drop else ''}" \
+                        f")"
         if transpose:
             layers = [
                          conv_layer(
                              in_channels=in_channels,
                              out_channels=in_channels,
+                             kernel_size=kernel_size,
                              padding=padding,
                              transpose=transpose,
                          ),
@@ -75,6 +84,7 @@ class Block(Module):
                          conv_layer(
                              in_channels=in_channels,
                              out_channels=out_channels,
+                             kernel_size=kernel_size,
                              padding=padding,
                              transpose=transpose,
                          ),
@@ -84,6 +94,7 @@ class Block(Module):
                          conv_layer(
                              in_channels=in_channels,
                              out_channels=out_channels,
+                             kernel_size=kernel_size,
                              padding=padding,
                              transpose=transpose,
                          )
@@ -92,6 +103,7 @@ class Block(Module):
                          conv_layer(
                              in_channels=out_channels,
                              out_channels=out_channels,
+                             kernel_size=kernel_size,
                              padding=padding,
                              transpose=transpose,
                          ),

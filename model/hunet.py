@@ -35,12 +35,16 @@ class HalfUNet(Module):
         super().__init__()
         self.pooler0 = nn.AvgPool3d((32, 32, 8))
         self.block0 = Block(4, 16, complexity=1, actv="leaky", norm="instance")
-        self.unblock0 = Block(16, 3, complexity=1, actv="relu", transpose=True)
-        self.unpooler0 = nn.Upsample(scale_factor=(32, 32, 8), mode='trilinear')
+        self.unblock0 = Block(16, 16, complexity=1, actv="relu", transpose=True)
+        self.early_exit0 = nn.Sequential(
+            Block(16, 3, complexity=2, kernel_size=(1, 1, 1)),
+            nn.Upsample(scale_factor=(32, 32, 8), mode='trilinear')
+        )
 
     def forward(self, x: Tensor) -> Tensor:
         # x.shape is [N, 4, 512, 512, 40]
-        return self.unpooler0(self.unblock0(self.block0(self.pooler0(x))))
+        return self.early_exit0(self.unblock0(self.block0(self.pooler0(x))))
+        
 
     def resume(self, models_path: Path, model_name="last_checkpoint.pth", device=torch.device("cpu")):
         try:
@@ -104,7 +108,11 @@ class HunetNetwork:
 
                 pred = self.net.forward(scan)
                 round_loss += self.loss_function(pred, segm).item() * batch_size
-                samples.append(report.sample(scan.detach().cpu(), pred.detach().cpu(), segm.detach().cpu()))
+                samples.append(report.sample(
+                    scan.detach().cpu().numpy(),
+                    torch.argmax(pred.detach(), dim=1).cpu().numpy(),
+                    segm.detach().cpu().numpy()
+                ))
 
                 progress.update(task, advance=batch_size)
 
@@ -131,7 +139,11 @@ class HunetNetwork:
                 loss.backward()
                 self.optimizer.step()
                 round_loss += loss.item() * batch_size
-                samples.append(report.sample(scan.detach().cpu(), pred.detach().cpu(), segm.detach().cpu()))
+                samples.append(report.sample(
+                    scan.detach().cpu().numpy(),
+                    torch.argmax(pred.detach(), dim=1).cpu().numpy(),
+                    segm.detach().cpu().numpy()
+                ))
 
                 progress.update(task, advance=batch_size)
 

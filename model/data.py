@@ -54,6 +54,12 @@ def store_dataset(source_path: Path, target_path: Path, pooler=None, slice_shape
             for slice in fixed_shape_slices(bundle, slice_shape, dims=(1, 2, 3)):
                 if tuple(slice.shape[-3:]) != slice_shape:
                     print("wrong shape in", case, "->", slice.shape)
+                    pad = slice_shape[2] - slice.shape[3]
+                    slice = np.concatenate([
+                        np.pad(slice[0:4], ((0, 0), (0, 0), (0, 0), (0, pad)), constant_values=-1024),
+                        np.pad(slice[4:5], ((0, 0), (0, 0), (0, 0), (0, pad)), constant_values=0)
+                    ])
+                    assert tuple(slice.shape[-3:]) == slice_shape, "Can't fix slice shape with padding"
                 if k % 10 == 0:
                     nd.save_niftiimage(target_path / "valid" / f"{i:06}.nii.gz", slice)
                 else:

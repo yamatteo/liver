@@ -88,19 +88,20 @@ class HunetNetwork:
     optimizer: AdaBelief
 
     @classmethod
-    def init_0(cls, dataset_path: Path, device: torch.device):
-        batch_size = 40
+    def init_0(cls, dataset_path: Path, device: torch.device, store: bool = False, source_path: Path = None):
+        batch_size = 8
         self = HunetNetwork()
+        self.net = HalfUNet()
+        self.net.to(device=device)
+
+        if store:
+            _store_dataset(source_path, dataset_path, slice_shape=(512, 512, 40), min_slice_z=40)
+
         def format(array):
             return {
-                "scan": torch.tensor(array[0:4], dtype=torch.float32, device=device),
-                "segm": torch.tensor(array[4], dtype=torch.int64, device=device)
+                "scan": self.net.poolers[0](torch.tensor(array[0:4], dtype=torch.float32)).to(device=device).detach(),
+                "segm": torch.tensor(array[4], dtype=torch.int64, device=device).detach()
             }
-
-        def store_dataset(source_path: Path, target_path: Path):
-            _store_dataset(source_path, target_path, min_slice_z=40)
-
-        self.store_dataset = store_dataset
 
         self.train_dataset = Dataset(dataset_path / "train", format)
         self.valid_dataset = Dataset(dataset_path / "valid", format)
@@ -116,8 +117,8 @@ class HunetNetwork:
             batch_size=batch_size,
         )
 
-        self.net = HalfUNet()
-        self.net.to(device=device)
+
+        
 
         parameters = [
             *self.net.dnblocks[0].parameters(),
@@ -136,6 +137,7 @@ class HunetNetwork:
         )
 
         self.loss_function = nn.CrossEntropyLoss().to(device=device)
+        return self
 
     @torch.no_grad()
     def evaluation_round(self, n: int, epoch: int, epochs: int):

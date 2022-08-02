@@ -39,8 +39,8 @@ def store_dataset(source_path: Path, target_path: Path, pooler=None, slice_shape
             yield bundle
 
     def pad_slice(slice):
-        if min_slice_z and slice_shape[2] > slice.shape[3]:
-            pad = slice_shape[2] - slice.shape[3]
+        if min_slice_z and min_slice_z > slice.shape[3]:
+            pad = min_slice_z - slice.shape[3]
             return np.concatenate([
                 np.pad(slice[0:4], ((0, 0), (0, 0), (0, 0), (0, pad)), constant_values=-1024),
                 np.pad(slice[4:5], ((0, 0), (0, 0), (0, 0), (0, pad)), constant_values=0)
@@ -53,6 +53,7 @@ def store_dataset(source_path: Path, target_path: Path, pooler=None, slice_shape
     console.print("  target_path =", target_path)
     console.print("  pooler =", pooler)
     console.print(f"  slice_shape = {slice_shape}")
+    console.print("  min_slice_z =", min_slice_z)
     (target_path / "train").mkdir(exist_ok=True)
     (target_path / "valid").mkdir(exist_ok=True)
     for case in px.iter_trainable(source_path):
@@ -70,13 +71,15 @@ def store_dataset(source_path: Path, target_path: Path, pooler=None, slice_shape
             bundle = torch.tensor(bundle)
             bundle = pooler(bundle)
             bundle = bundle.numpy()
-            for slice in iter_slice(bundle):
-                slice = pad_slice(slice)
-                assert tuple(
-                    slice.shape[-3:]) == slice_shape, f"Can't fix slice shape ({slice.shape} vs {slice_shape})!"
-                if k % 10 == 0:
-                    nd.save_niftiimage(target_path / "valid" / f"{i:06}.nii.gz", slice)
-                else:
-                    nd.save_niftiimage(target_path / "train" / f"{i:06}.nii.gz", slice)
-                i += 1
+        for slice in iter_slice(bundle):
+            slice = pad_slice(slice)
+            assert (
+                slice_shape is None
+                or tuple(slice.shape[-3:]) == slice_shape
+            ), f"Can't fix slice shape ({slice.shape} vs {slice_shape})!"
+            if k % 10 == 0:
+                nd.save_niftiimage(target_path / "valid" / f"{i:06}.nii.gz", slice)
+            else:
+                nd.save_niftiimage(target_path / "train" / f"{i:06}.nii.gz", slice)
+            i += 1
         k += 1

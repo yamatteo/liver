@@ -69,13 +69,13 @@ class HunetNetwork:
         self.valid_dataset = Dataset(dataset_path / "valid", format)
         self.tdl = DataLoader(
             self.train_dataset,
-            pin_memory=True,
-            batch_size=20,
+            pin_memory=False,
+            batch_size=10,
         )
         self.vdl = DataLoader(
             self.valid_dataset,
-            pin_memory=True,
-            batch_size=20,
+            pin_memory=False,
+            batch_size=10,
         )
 
         self.net = HalfUNet()
@@ -124,13 +124,14 @@ class HunetNetwork:
         samples = []
         with Progress(transient=True) as progress:
             task = progress.add_task(
-                f"Training epoch {epoch + 1}/{epochs}.".ljust(50, ' '),
+                f"Training epoch {epoch + 1}/{epochs}. {len(self.train_dataset)} to process.".ljust(50, ' '),
                 total=len(self.train_dataset)
             )
-            for batched_data in self.vdl:
+            for batched_data in self.tdl:
                 scan = batched_data["scan"]
                 segm = batched_data["segm"]
                 batch_size = segm.size(0)
+                console.print("batch size", batch_size)
 
                 self.optimizer.zero_grad(set_to_none=True)
 

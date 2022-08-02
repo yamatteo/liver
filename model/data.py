@@ -1,3 +1,4 @@
+from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
@@ -10,6 +11,7 @@ import dataset.path_explorer as px
 from dataset.slices import fixed_shape_slices
 
 console = Console()
+
 
 class Dataset(torch.utils.data.Dataset):
     def __init__(self, path: Path, format=torch.tensor):
@@ -26,8 +28,26 @@ class Dataset(torch.utils.data.Dataset):
         return self.format(data)
 
 
-def store_dataset(source_path: Path, target_path: Path, pooler=None, slice_shape=None):
+def store_dataset(source_path: Path, target_path: Path, pooler=None, slice_shape: tuple[int, int, int] = None,
+                  min_slice_z: int = None):
     i, k = 0, 0
+
+    def iter_slice(bundle):
+        if slice_shape:
+            yield from fixed_shape_slices(bundle, slice_shape, dims=(1, 2, 3))
+        else:
+            yield bundle
+
+    def pad_slice(slice):
+        if min_slice_z and slice_shape[2] > slice.shape[3]:
+            pad = slice_shape[2] - slice.shape[3]
+            return np.concatenate([
+                np.pad(slice[0:4], ((0, 0), (0, 0), (0, 0), (0, pad)), constant_values=-1024),
+                np.pad(slice[4:5], ((0, 0), (0, 0), (0, 0), (0, pad)), constant_values=0)
+            ])
+        else:
+            return slice
+
     console.print("Storing dataset:")
     console.print("  source_path =", source_path)
     console.print("  target_path =", target_path)
@@ -50,25 +70,13 @@ def store_dataset(source_path: Path, target_path: Path, pooler=None, slice_shape
             bundle = torch.tensor(bundle)
             bundle = pooler(bundle)
             bundle = bundle.numpy()
-        if slice_shape:
-            for slice in fixed_shape_slices(bundle, slice_shape, dims=(1, 2, 3)):
-                if tuple(slice.shape[-3:]) != slice_shape:
-                    print("wrong shape in", case, "->", slice.shape)
-                    pad = slice_shape[2] - slice.shape[3]
-                    slice = np.concatenate([
-                        np.pad(slice[0:4], ((0, 0), (0, 0), (0, 0), (0, pad)), constant_values=-1024),
-                        np.pad(slice[4:5], ((0, 0), (0, 0), (0, 0), (0, pad)), constant_values=0)
-                    ])
-                    assert tuple(slice.shape[-3:]) == slice_shape, "Can't fix slice shape with padding"
+            for slice in iter_slice(bundle):
+                slice = pad_slice(slice)
+                assert tuple(
+                    slice.shape[-3:]) == slice_shape, f"Can't fix slice shape ({slice.shape} vs {slice_shape})!"
                 if k % 10 == 0:
                     nd.save_niftiimage(target_path / "valid" / f"{i:06}.nii.gz", slice)
                 else:
                     nd.save_niftiimage(target_path / "train" / f"{i:06}.nii.gz", slice)
                 i += 1
-        else:
-            if k % 10 == 0:
-                nd.save_niftiimage(target_path / "valid" / f"{i:06}.nii.gz", bundle)
-            else:
-                nd.save_niftiimage(target_path / "train" / f"{i:06}.nii.gz", bundle)
-            i += 1
         k += 1

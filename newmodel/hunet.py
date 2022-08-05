@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 
 import report
 from .models import *
-from .data import Dataset, store_dataset as _store_dataset
+from .data import Dataset, store_441_dataset as _store_dataset
 
 console = Console()
 
@@ -26,8 +26,8 @@ class HalfUNet(Module):
         ])
         self.dnblocks = nn.ModuleList([
             Block(
-                in_channels=4 if n==0 else 20*n,
-                out_channels=16 + 20*n,
+                in_channels=4 if n == 0 else 20 * n,
+                out_channels=16 + 20 * n,
                 complexity=1,
                 actv="leaky",
                 norm="batch",
@@ -37,8 +37,8 @@ class HalfUNet(Module):
         ])
         self.upblocks = nn.ModuleList([
             Block(
-                in_channels=16 + 20*n,
-                out_channels=16 + 20*n,
+                in_channels=16 + 20 * n,
+                out_channels=16 + 20 * n,
                 complexity=1,
                 actv="relu",
                 drop="drop",
@@ -48,7 +48,7 @@ class HalfUNet(Module):
         ])
         self.exits = nn.ModuleList([
             nn.Sequential(
-                Block(16 + 20*n, 3, complexity=2, kernel_size=(1, 1, 1)),
+                Block(16 + 20 * n, 3, complexity=2, kernel_size=(1, 1, 1)),
                 nn.Upsample(scale_factor=scale_factor, mode='trilinear')
             )
             for n, scale_factor in enumerate(self.scale_factors)
@@ -64,7 +64,6 @@ class HalfUNet(Module):
     def forward_prep_exit(self, n: int, x: Tensor) -> Tensor:
         # x.shape is [N, 4 if n==0 else 20*n, 512, 512, 40] / scale_factors[n]
         return self.exits[n](self.upblocks[n](self.dnblocks[n](x)))
-        
 
     def resume(self, models_path: Path, model_name="last_checkpoint.pth", device=torch.device("cpu")):
         try:
@@ -116,9 +115,6 @@ class HunetNetwork:
             pin_memory=False,
             batch_size=batch_size,
         )
-
-
-        
 
         parameters = [
             *self.net.dnblocks[0].parameters(),

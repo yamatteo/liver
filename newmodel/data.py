@@ -15,7 +15,7 @@ console = Console()
 
 
 class Dataset(torch.utils.data.Dataset):
-    def __init__(self, path: Path, format=torch.tensor):
+    def __init__(self, path: Path, format=None):
         super(Dataset, self).__init__()
         self.files = list(path.iterdir())
         self.format = format
@@ -25,8 +25,11 @@ class Dataset(torch.utils.data.Dataset):
 
     def __getitem__(self, i: int):
         path = self.files[i]
-        data = nd.load_niftidata(path)
-        return self.format(data)
+        data = torch.load(path)
+        if self.format:
+            return self.format(data)
+        else:
+            return data
 
 
 def store_441_dataset(source_path: Path, target_path: Path, slice_shape: tuple[int, int, int]):
@@ -51,9 +54,9 @@ def store_441_dataset(source_path: Path, target_path: Path, slice_shape: tuple[i
         for slice in padded_overlapping_bundle_slices(bundle, slice_shape):
             assert tuple(slice.shape[-3:]) == slice_shape, f"Can't fix slice shape ({slice.shape} vs {slice_shape})!"
             scan = torch.tensor(slice[0:4], dtype=torch.float32)
-            segm = torch.tensor(slice[4], dtype=torch.int64)
+            segm = torch.tensor(slice[4:5], dtype=torch.float32)
             scan = nn.AvgPool3d((4, 4, 1))(scan)
-            segm = nn.MaxPool3d((4, 4, 1))(segm)
+            segm = nn.MaxPool3d((4, 4, 1))(segm).squeeze(0).to(dtype=torch.int16)
             assert 0 <= torch.min(segm) <= torch.max(segm) <= 2
 
             if k % 10 == 0:

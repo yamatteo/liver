@@ -1,16 +1,24 @@
+import argparse
 import pickle
 from pathlib import Path
 
 import nibabel
 import numpy as np
 import torch
+from adabelief_pytorch import AdaBelief
 from rich.console import Console
+from rich.progress import Progress
+from torch import nn
+from torch.utils.data import DataLoader
 
+import report
 import utils.ndarray as nd
 import utils.path_explorer as px
 from utils.slices import overlapping_slices
 from distances import liverscore, tumorscore
 from .hunet import HunetNetwork, HalfUNet
+from .data import store_441_dataset, Dataset
+from .models import UNet
 
 console = Console()
 saved_models = Path(__file__).parent / "saved_models"
@@ -25,9 +33,130 @@ def setup_evaluation():
     model.resume(saved_models, "last_checkpoint.pth", device)
     return model, device
 
-def setup_train():
-    pass
 
+def setup_train(dataset_path: Path, models_path: Path = "saved_models", model_name: str = "last.pth",
+                batch_size: int = 50, device=torch.device("cpu")):
+    self = argparse.Namespace()
+    self.model = UNet([4, 32, 48, 64])
+
+    try:
+        self.model.load_state_dict(torch.load(models_path / model_name, map_location=device))
+        console.print(f"Model loaded from {models_path / model_name}")
+    except FileNotFoundError:
+        console.print(f"Model {models_path / model_name} does not exist. Starting with a new model.")
+        
+    self.train_dataset = Dataset(dataset_path / "train")
+    self.valid_dataset = Dataset(dataset_path / "valid")
+
+    self.tdl = DataLoader(
+        self.train_dataset,
+        pin_memory=True,
+        batch_size=batch_size,
+    )
+    self.vdl = DataLoader(
+        self.valid_dataset,
+        pin_memory=True,
+        batch_size=batch_size,
+    )
+
+    self.optimizer = AdaBelief(
+        self.model.parameters(),
+        lr=1e-3,
+        eps=1e-8,
+        betas=(0.9, 0.999),
+        weight_decouple=False,
+        rectify=False,
+        print_change_log=False,
+    )
+
+    self.loss_function = nn.CrossEntropyLoss().to(device=device)
+    return self
+
+@torch.no_grad()
+def evaluation_round(setup, n: int, epoch: int, epochs: int):
+    round_loss = 0
+    samples = []
+    with Progress(transient=True) as progress:
+        task = progress.add_task(
+            f"Eval epoch {epoch + 1}/{epochs}.".ljust(50, ' '),
+            total=len(setup.valid_dataset)
+        )
+        for batched_data in setup.vdl:
+            scan = batched_data["scan"]
+            segm = batched_data["segm"]
+            batch_size = segm.size(0)
+
+            pred = setup.model.forward_prep_exit(n, scan)
+            round_loss += setup.loss_function(pred, segm).item() * batch_size
+            samples.append(report.sample(
+                scan.detach().cpu().numpy(),
+                torch.argmax(pred.detach(), dim=1).cpu().numpy(),
+                segm.detach().cpu().numpy()
+            ))
+
+            progress.update(task, advance=batch_size)
+
+    scan_loss = round_loss / len(setup.valid_dataset)
+    return scan_loss, samples
+
+def training_round(setup, n: int, epoch: int, epochs: int):
+    round_loss = 0
+    samples = []
+    with Progress(transient=True) as progress:
+        task = progress.add_task(
+            f"Training epoch {epoch + 1}/{epochs}. {len(setup.train_dataset)} to process.".ljust(50, ' '),
+            total=len(setup.train_dataset)
+        )
+        for batched_data in setup.tdl:
+            scan = batched_data["scan"]
+            segm = batched_data["segm"]
+            batch_size = segm.size(0)
+
+            setup.optimizer.zero_grad(set_to_none=True)
+
+            pred = setup.model.forward_prep_exit(n, scan)
+            loss = setup.loss_function(pred, segm)
+            loss.backward()
+            setup.optimizer.step()
+            round_loss += loss.item() * batch_size
+            samples.append(report.sample(
+                scan.detach().cpu().numpy(),
+                torch.argmax(pred.detach(), dim=1).cpu().numpy(),
+                segm.detach().cpu().numpy()
+            ))
+
+            progress.update(task, advance=batch_size)
+
+    scan_loss = round_loss / len(setup.train_dataset)
+    return scan_loss, samples
+
+def train(setup, *, n: int, epochs: int = 400, models_path: Path):
+    run = report.init(project="liver-tumor-detection", entity="yamatteo", backend="wandb", level="debug")
+    try:
+        for epoch in range(epochs):
+            if epoch % 20 == 0:
+                setup.model.eval()
+                scan_loss, samples = evaluation_round(setup, n, epoch, epochs)
+                console.print(
+                    f"Evaluation epoch {epoch + 1}/{epochs}. "
+                    f"Loss per scan: {scan_loss:.2e}"
+                    f"".ljust(50, ' ')
+                )
+                report.append({"valid_epoch_loss": scan_loss, "samples": samples})
+                torch.save(setup.model.state_dict(), models_path / "last_checkpoint.pth")
+                torch.save(setup.model.state_dict(), models_path / f"checkpoint{epoch:03}.pth")
+            else:
+                setup.model.train()
+                scan_loss, samples = training_round(setup, n, epoch, epochs)
+                console.print(
+                    f"Training epoch {epoch + 1}/{epochs}. "
+                    f"Loss per scan: {scan_loss:.2e}"
+                    f"".ljust(50, ' ')
+                )
+                report.append({"train_epoch_loss": scan_loss, "samples": samples})
+    except:
+        run.finish()
+        console.print_exception()
 
 @torch.no_grad()
 def apply(model, case_path, device):

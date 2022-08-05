@@ -37,14 +37,17 @@ def setup_evaluation():
 def setup_train(dataset_path: Path, models_path: Path = "saved_models", model_name: str = "last.pth",
                 batch_size: int = 50, device=torch.device("cpu")):
     self = argparse.Namespace()
+    self.device = device
+
     self.model = UNet([4, 32, 48, 64])
+    self.model.to(device=device)
 
     try:
         self.model.load_state_dict(torch.load(models_path / model_name, map_location=device))
         console.print(f"Model loaded from {models_path / model_name}")
     except FileNotFoundError:
         console.print(f"Model {models_path / model_name} does not exist. Starting with a new model.")
-        
+
     self.train_dataset = Dataset(dataset_path / "train")
     self.valid_dataset = Dataset(dataset_path / "valid")
 
@@ -72,8 +75,9 @@ def setup_train(dataset_path: Path, models_path: Path = "saved_models", model_na
     self.loss_function = nn.CrossEntropyLoss().to(device=device)
     return self
 
+
 @torch.no_grad()
-def evaluation_round(setup, n: int, epoch: int, epochs: int):
+def evaluation_round(setup, epoch: int, epochs: int):
     round_loss = 0
     samples = []
     with Progress(transient=True) as progress:
@@ -82,11 +86,11 @@ def evaluation_round(setup, n: int, epoch: int, epochs: int):
             total=len(setup.valid_dataset)
         )
         for batched_data in setup.vdl:
-            scan = batched_data["scan"]
-            segm = batched_data["segm"]
+            scan = batched_data["scan"].to(device=setup.device)
+            segm = batched_data["segm"].to(device=setup.device, dtype=torch.int64)
             batch_size = segm.size(0)
 
-            pred = setup.model.forward_prep_exit(n, scan)
+            pred = setup.model(scan)
             round_loss += setup.loss_function(pred, segm).item() * batch_size
             samples.append(report.sample(
                 scan.detach().cpu().numpy(),
@@ -99,7 +103,8 @@ def evaluation_round(setup, n: int, epoch: int, epochs: int):
     scan_loss = round_loss / len(setup.valid_dataset)
     return scan_loss, samples
 
-def training_round(setup, n: int, epoch: int, epochs: int):
+
+def training_round(setup, epoch: int, epochs: int):
     round_loss = 0
     samples = []
     with Progress(transient=True) as progress:
@@ -108,13 +113,13 @@ def training_round(setup, n: int, epoch: int, epochs: int):
             total=len(setup.train_dataset)
         )
         for batched_data in setup.tdl:
-            scan = batched_data["scan"]
-            segm = batched_data["segm"]
+            scan = batched_data["scan"].to(device=setup.device)
+            segm = batched_data["segm"].to(device=setup.device, dtype=torch.int64)
             batch_size = segm.size(0)
 
             setup.optimizer.zero_grad(set_to_none=True)
 
-            pred = setup.model.forward_prep_exit(n, scan)
+            pred = setup.model(scan)
             loss = setup.loss_function(pred, segm)
             loss.backward()
             setup.optimizer.step()
@@ -130,13 +135,14 @@ def training_round(setup, n: int, epoch: int, epochs: int):
     scan_loss = round_loss / len(setup.train_dataset)
     return scan_loss, samples
 
-def train(setup, *, n: int, epochs: int = 400, models_path: Path):
+
+def train(setup, *, epochs: int = 400, models_path: Path):
     run = report.init(project="liver-tumor-detection", entity="yamatteo", backend="wandb", level="debug")
     try:
         for epoch in range(epochs):
             if epoch % 20 == 0:
                 setup.model.eval()
-                scan_loss, samples = evaluation_round(setup, n, epoch, epochs)
+                scan_loss, samples = evaluation_round(setup, epoch, epochs)
                 console.print(
                     f"Evaluation epoch {epoch + 1}/{epochs}. "
                     f"Loss per scan: {scan_loss:.2e}"
@@ -147,7 +153,7 @@ def train(setup, *, n: int, epochs: int = 400, models_path: Path):
                 torch.save(setup.model.state_dict(), models_path / f"checkpoint{epoch:03}.pth")
             else:
                 setup.model.train()
-                scan_loss, samples = training_round(setup, n, epoch, epochs)
+                scan_loss, samples = training_round(setup, epoch, epochs)
                 console.print(
                     f"Training epoch {epoch + 1}/{epochs}. "
                     f"Loss per scan: {scan_loss:.2e}"
@@ -157,6 +163,7 @@ def train(setup, *, n: int, epochs: int = 400, models_path: Path):
     except:
         run.finish()
         console.print_exception()
+
 
 @torch.no_grad()
 def apply(model, case_path, device):

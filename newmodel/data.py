@@ -56,7 +56,7 @@ def store_441_dataset(source_path: Path, target_path: Path, slice_shape: tuple[i
             scan = torch.tensor(slice[0:4], dtype=torch.float32)
             segm = torch.tensor(slice[4:5], dtype=torch.float32)
             scan = nn.AvgPool3d((4, 4, 1))(scan)
-            segm = nn.MaxPool3d((4, 4, 1))(segm).squeeze(0).to(dtype=torch.int16)
+            segm = nn.MaxPool3d((4, 4, 1))(segm).squeeze(0).to(dtype=torch.int64)
             assert 0 <= torch.min(segm) <= torch.max(segm) <= 2
 
             if k % 10 == 0:

@@ -9,7 +9,7 @@ from pathlib import Path
 import scripts.dicom2nifti
 import scripts.niftyreg
 import scripts.pyelastix
-from dataset.path_explorer import iter_dicom, iter_original, iter_registered
+from utils.path_explorer import iter_dicom, iter_original, iter_registered
 
 
 @pytest.mark.skipif(not (Path(__file__).parent / "sources").exists(), reason="requires test_package/sources")

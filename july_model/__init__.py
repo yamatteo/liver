@@ -5,8 +5,8 @@ import nibabel
 import torch
 from rich.console import Console
 
-import dataset.ndarray as nd
-import dataset.path_explorer as px
+import utils.ndarray as nd
+import utils.path_explorer as px
 from distances import liverscore, tumorscore
 from .subclass_tensors import FloatScan, Segm
 from .models.double_unet import DoubleUNet

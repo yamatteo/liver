@@ -6,9 +6,9 @@ import numpy as np
 from rich.console import Console
 from torch import nn
 
-from dataset.path_explorer import iter_trainable
-from dataset.ndarray import load_affine, load_scan, load_segm
-from dataset.tensors import load_floatscan, load_floatsegm
+from utils.path_explorer import iter_trainable
+from utils.ndarray import load_affine, load_scan, load_segm
+from utils.tensors import load_floatscan, load_floatsegm
 
 
 def main(opts):

@@ -3,9 +3,9 @@ import argparse
 from pathlib import Path
 from rich.console import Console
 
-import dataset.ndarray
+import utils.ndarray
 import preprocessing.pyelastix
-from dataset.path_explorer import iter_original
+from utils.path_explorer import iter_original
 
 
 def main(opts):
@@ -23,7 +23,7 @@ def main(opts):
             target_path.mkdir(parents=True, exist_ok=True)
             console.print(f"[bold black]{case_path}.[/bold black] Registering with pyelastix...")
             regs, matrix, bottom, top, height = preprocessing.pyelastix.regs_dict_from(source_path)
-            dataset.ndarray.save_registereds(
+            utils.ndarray.save_registereds(
                 regs,
                 path=target_path,
                 affine=matrix,

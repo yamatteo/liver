@@ -10,8 +10,8 @@ import torch.nn.functional as F
 from rich.console import Console
 from torch import nn
 
-import dataset.path_explorer as px
-import dataset.ndarray as nd
+import utils.path_explorer as px
+import utils.ndarray as nd
 from distances import liverscore, tumorscore
 from .models import funet
 from .models import unet3dB

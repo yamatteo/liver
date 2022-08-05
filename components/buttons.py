@@ -2,9 +2,9 @@ from ipywidgets import Button, Layout
 from rich.console import Console
 
 import april_model
-import dataset.path_explorer as px
+import utils.path_explorer as px
 import july_model
-import model as newmodel
+import newmodel as newmodel
 
 from preprocessing import process_dicomdir
 from . import reactions
@@ -20,28 +20,28 @@ class ButtonGenerator:
     register_all = Button(layout=Layout(width='auto'))
 
     april_one = Button(
-        description="Apply april's model",
+        description="Apply april's newmodel",
         layout=Layout(width='auto')
     )
     april_all = Button(
-        description="Apply april's model to all",
+        description="Apply april's newmodel to all",
         layout=Layout(width='auto')
     )
     april_evaluate = Button(
-        description="Evaluate april's model",
+        description="Evaluate april's newmodel",
         layout=Layout(width='auto')
     )
 
     july_one = Button(
-        description="Apply july's model",
+        description="Apply july's newmodel",
         layout=Layout(width='auto')
     )
     july_all = Button(
-        description="Apply july's model to all",
+        description="Apply july's newmodel to all",
         layout=Layout(width='auto')
     )
     july_evaluate = Button(
-        description="Evaluate july's model",
+        description="Evaluate july's newmodel",
         layout=Layout(width='auto')
     )
 

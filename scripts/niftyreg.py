@@ -4,7 +4,7 @@ from pathlib import Path
 from rich.console import Console
 
 from preprocessing import register_case
-from dataset.path_explorer import iter_original
+from utils.path_explorer import iter_original
 
 
 def main(opts):

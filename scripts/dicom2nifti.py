@@ -3,7 +3,7 @@ from pathlib import Path
 
 from rich.console import Console
 
-from dataset.path_explorer import iter_dicom
+from utils.path_explorer import iter_dicom
 from preprocessing import process_dicomdir
 
 def main(opts):

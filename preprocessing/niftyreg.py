@@ -3,7 +3,7 @@ from pathlib import Path
 from rich.console import Console
 from tempfile import NamedTemporaryFile
 
-import dataset.ndarray
+import utils.ndarray
 
 console = Console()
 
@@ -15,10 +15,10 @@ def register_case(source_path: Path, target_path: Path, niftybin: Path):
     console.print(f"[bold black]{case_name}.[/bold black] Working (it is a long process) ...")
 
     # Store the phase v as is, with its affine matrix
-    v_phase = dataset.ndarray.load_niftiimage(path=source_path / "original_phase_v.nii.gz")
+    v_phase = utils.ndarray.load_niftiimage(path=source_path / "original_phase_v.nii.gz")
     # v_phase = nibabel.load(source_path / "original_phase_v.nii.gz")
 
-    dataset.ndarray.save_original(image=v_phase, path=source_path, phase='v')
+    utils.ndarray.save_original(image=v_phase, path=source_path, phase='v')
     # nibabel.save(v_phase, str(target_path / "registered_phase_v.nii.gz"))
     with NamedTemporaryFile("wb", suffix=".nii") as cpp_file:
         for phase in ["b", "a", "t"]:

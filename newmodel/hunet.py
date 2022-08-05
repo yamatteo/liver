@@ -10,7 +10,7 @@ from rich.progress import Progress
 from torch.utils.data import DataLoader
 
 import report
-from .block import *
+from .models import *
 from .data import Dataset, store_dataset as _store_dataset
 
 console = Console()

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import numpy as np
 
-from dataset.slices import overlapping_slices, fixed_shape_slices
+from utils.slices import overlapping_slices, fixed_shape_slices
 
 
 class TestSlicing(unittest.TestCase):

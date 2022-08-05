@@ -6,7 +6,7 @@ import numpy as np
 import pyelastix
 import scipy.ndimage
 
-import dataset.ndarray
+import utils.ndarray
 
 
 def move_image(input: np.ndarray, input_matrix: np.ndarray, target: np.ndarray, target_matrix: np.ndarray) -> tuple[
@@ -45,7 +45,7 @@ def regs_dict_from(path: Path) -> tuple[dict[str, np.ndarray], np.ndarray, int, 
         - bottom, top and height: if the original v phase has shape [512, 512, height],
           then all registered phases are cropped to the same space equivalent to [512, 512, bottom:top]
     """
-    originals = {phase: dataset.ndarray.load_original(path, phase) for phase in ["b", "a", "v", "t"]}
+    originals = {phase: utils.ndarray.load_original(path, phase) for phase in ["b", "a", "v", "t"]}
     orig_v, matrix = originals["v"]
     moveds = {phase: move_image(*originals[phase], orig_v, matrix) for phase in ["b", "a", "t"]}
     bottom = max(_bottom for (_, _bottom, _) in moveds.values())
@@ -73,11 +73,11 @@ def regs_dict_from(path: Path) -> tuple[dict[str, np.ndarray], np.ndarray, int, 
 
 def register_case(path):
     regs, matrix, bottom, top, height = regs_dict_from(path)
-    dataset.ndarray.save_registereds(regs, path=path, affine=matrix, bottom=bottom, top=top, height=height)
+    utils.ndarray.save_registereds(regs, path=path, affine=matrix, bottom=bottom, top=top, height=height)
 
 
 # def registration_callback(event, path, overwrite):
-#     from dataset.path_explorer import iter_original
+#     from utils.path_explorer import iter_original
 #     if path is None:
 #         for case in iter_original(base_path):
 #             registration_callback(event, path=base_path / case, overwrite=False)

@@ -8,7 +8,7 @@ from typing import Optional, Tuple
 import dicom2nifti
 from rich.console import Console
 
-import dataset.ndarray
+import utils.ndarray
 
 console = Console()
 
@@ -69,7 +69,7 @@ def process_dicomdir(source_path: Path, target_path: Path):
         for path in temp_path.iterdir():
             index, phase = get_info(str(path.name))
             if index is not None or phase is not None:
-                image = dataset.ndarray.load_niftiimage(temp_path / path.name)
+                image = utils.ndarray.load_niftiimage(temp_path / path.name)
                 if image.shape[:2] == (512, 512):
                     items.append((index, phase, image))
                 else:
@@ -123,7 +123,7 @@ def process_dicomdir(source_path: Path, target_path: Path):
         for phase in ["b", "a", "v", "t"]:
             phases[phase].header.set_sform(phases[phase].affine)
             phases[phase].header.set_qform(phases[phase].affine)
-            dataset.ndarray.save_original(phases[phase], target_path, phase)
+            utils.ndarray.save_original(phases[phase], target_path, phase)
         console.print(
             f"{' ' * len(case_name)}  "
             f"Original images saved in {target_path.absolute()}."

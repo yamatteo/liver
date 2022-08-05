@@ -7,7 +7,7 @@ from random import randint
 import nibabel
 import numpy as np
 
-from dataset import ndarray
+from utils import ndarray
 
 
 class TestNdarrayIO(unittest.TestCase):

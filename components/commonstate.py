@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from traitlets import HasTraits, Any
-import dataset.path_explorer
+import utils.path_explorer as px
 
 from . import reactions
 
@@ -29,7 +29,7 @@ def get_new_state():
 
     @reactions.injection(state, state, except_to=[])
     def cases(base_path):
-        return dataset.path_explorer.discover(base_path)
+        return px.discover(base_path)
 
     @reactions.injection(state, state, except_to=None)
     def case_path(base_path, case):

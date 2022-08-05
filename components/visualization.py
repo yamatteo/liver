@@ -5,7 +5,7 @@ from ipywidgets import Dropdown, IntSlider, Output
 from matplotlib import pyplot as plt
 from torch.nn.functional import l1_loss
 
-import dataset.ndarray
+import utils.ndarray
 
 
 def build_tv(state, inject, project, biject):
@@ -84,16 +84,16 @@ def build_tv(state, inject, project, biject):
 
 
 def load_original(case_path, phase):
-    data, _ = dataset.ndarray.load_original(case_path, phase=phase)
+    data, _ = utils.ndarray.load_original(case_path, phase=phase)
     # orig.shape is [X, Y, Z]
     data = data.clip(0, 255) / 255
     return np.stack([data, data, data])  # shape is [RGB, X, Y, Z]
 
 
 def load_regcheck(case_path, phase):
-    reg = dataset.ndarray.load_registered(case_path, phase=phase)
-    orig, _ = dataset.ndarray.load_original(case_path, phase=phase)
-    origv, _ = dataset.ndarray.load_original(case_path, phase="v")
+    reg = utils.ndarray.load_registered(case_path, phase=phase)
+    orig, _ = utils.ndarray.load_original(case_path, phase=phase)
+    origv, _ = utils.ndarray.load_original(case_path, phase="v")
     # shapes are [X, Y, Z], possibly different Z for orig and origv
     zmax = min(orig.shape[2], origv.shape[2])
     reg = reg[..., :zmax].clip(0, 255) / 255
@@ -106,17 +106,17 @@ def load_regcheck(case_path, phase):
 
 
 def load_registered(case_path, phase):
-    data = dataset.ndarray.load_registered(case_path, phase=phase)
+    data = utils.ndarray.load_registered(case_path, phase=phase)
     # orig.shape is [X, Y, Z]
     data = data.clip(0, 255) / 255
     return np.stack([data, data, data])  # shape is [RGB, X, Y, Z]
 
 
 def load_rgbscan(case_path):
-    white = dataset.ndarray.load_registered(case_path, phase="b")
-    red = dataset.ndarray.load_registered(case_path, phase="a")
-    green = dataset.ndarray.load_registered(case_path, phase="v")
-    blue = dataset.ndarray.load_registered(case_path, phase="t")
+    white = utils.ndarray.load_registered(case_path, phase="b")
+    red = utils.ndarray.load_registered(case_path, phase="a")
+    green = utils.ndarray.load_registered(case_path, phase="v")
+    blue = utils.ndarray.load_registered(case_path, phase="t")
     white = white.clip(0, 255) / 255
     red = red.clip(0, 255) / 255
     green = green.clip(0, 255) / 255
@@ -128,8 +128,8 @@ def load_rgbscan(case_path):
 
 
 def load_segm(case_path, what: str = "segmentation"):
-    white = dataset.ndarray.load_registered(case_path, phase="v")
-    segm = dataset.ndarray.load_segm(case_path)
+    white = utils.ndarray.load_registered(case_path, phase="v")
+    segm = utils.ndarray.load_segm(case_path)
     assert white.shape[2] == segm.shape[2], "Segmentation and registered phase v have different height"
     white = white.clip(0, 255) / 255
     red = (segm == 1).astype(float)
@@ -142,9 +142,9 @@ def load_segm(case_path, what: str = "segmentation"):
 
 
 def load_error(case_path, klass: int):
-    white = dataset.ndarray.load_registered(case_path, phase="v")
-    segm = dataset.ndarray.load_segm(case_path)
-    pred = dataset.ndarray.load_segm(case_path, "prediction")
+    white = utils.ndarray.load_registered(case_path, phase="v")
+    segm = utils.ndarray.load_segm(case_path)
+    pred = utils.ndarray.load_segm(case_path, "prediction")
     assert white.shape[2] == segm.shape[2], "Segmentation and registered phase v have different height"
     white = white.clip(0, 255) / 255
     red = l1_loss((segm == klass).astype(float), (pred == klass).astype(float))

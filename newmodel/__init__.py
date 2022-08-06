@@ -83,13 +83,13 @@ def setup_train(
         print_change_log=False,
     )
 
-    self.loss_function = nn.CrossEntropyLoss(torch.tensor([1, 10, 100])).to(device=device)
+    self.loss_function = nn.CrossEntropyLoss(torch.tensor([1, 2, 5])).to(device=device)
     if buffer_size > 0:
-        m = nn.CrossEntropyLoss(torch.tensor([1, 10, 100]), reduction="none").to(device=device)
+        m = nn.CrossEntropyLoss(torch.tensor([1, 2, 5]), reduction="none").to(device=device)
         def score_function(pred, segm, keys):
             loss = m(pred, segm)
-            loss = torch.mean(loss, dim=[1, 2, 3, 4])
-            scores = {k: loss[i].item() for i, k in enumerate(keys)}
+            loss = torch.mean(loss, dim=[1, 2, 3])
+            scores = {k.item(): loss[i].item() for i, k in enumerate(keys)}
             return scores
         self.score_function = score_function
     return self
@@ -193,7 +193,7 @@ def train(setup, *, epochs: int = 400, resume_from=0, models_path: Path, use_buf
                 setup.model.train()
                 if use_buffer is True:
                     scan_loss, scores, samples = training_round(setup, epoch, epochs, use_buffer=True)
-                    setup.training_dataset.drop(scores)
+                    setup.train_dataset.drop(scores)
                 else:
                     scan_loss, samples = training_round(setup, epoch, epochs, use_buffer=False)
                 console.print(

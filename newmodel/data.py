@@ -46,7 +46,7 @@ class BufferDataset(torch.utils.data.Dataset):
 
 
     def __len__(self):
-        return self.buffer_size
+        return len(self.buffer)
 
     def __getitem__(self, i: int):
         k = list(self.buffer.keys())[i]
@@ -62,8 +62,8 @@ class BufferDataset(torch.utils.data.Dataset):
                 self.buffer[k] = torch.load(path)
 
     def drop(self, scores: dict[int, float]):
-        highest = heapq.nlargest(self.staging_size, list(scores.keys()), lambda i: scores[i])
-        for k in highest:
+        smallest = heapq.nsmallest(self.staging_size, list(scores.keys()), lambda i: scores[i])
+        for k in smallest:
             del self.buffer[k]
         self.fill()
 

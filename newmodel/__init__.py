@@ -18,7 +18,7 @@ import utils.path_explorer as px
 from utils.slices import overlapping_slices
 from distances import liverscore, tumorscore
 from .hunet import HunetNetwork, HalfUNet
-from .data import store_441_dataset, Dataset
+from .data import store_441_dataset, Dataset, BufferDataset
 from .models import UNet
 
 console = Console()
@@ -37,6 +37,7 @@ def setup_evaluation():
 
 def setup_train(
         dataset_path: Path,
+        buffer_size: int = 0,
         models_path: Path = "saved_models",
         model_name: str = "last.pth",
         device=torch.device("cpu"),
@@ -55,7 +56,10 @@ def setup_train(
     except FileNotFoundError:
         console.print(f"Model {models_path / model_name} does not exist. Starting with a new model.")
 
-    self.train_dataset = Dataset(dataset_path / "train")
+    if buffer_size > 0:
+        self.train_dataset = BufferDataset(dataset_path / "train", buffer_size, buffer_size // 10)
+    else:
+        self.train_dataset = Dataset(dataset_path / "train")
     self.valid_dataset = Dataset(dataset_path / "valid")
 
     self.tdl = DataLoader(
@@ -79,7 +83,15 @@ def setup_train(
         print_change_log=False,
     )
 
-    self.loss_function = nn.CrossEntropyLoss(torch.tensor([1, 5, 20])).to(device=device)
+    self.loss_function = nn.CrossEntropyLoss(torch.tensor([1, 10, 100])).to(device=device)
+    if buffer_size > 0:
+        m = nn.CrossEntropyLoss(torch.tensor([1, 10, 100]), reduction="none").to(device=device)
+        def score_function(pred, segm, keys):
+            loss = m(pred, segm)
+            loss = torch.mean(loss, dim=[1, 2, 3, 4])
+            scores = {k: loss[i].item() for i, k in enumerate(keys)}
+            return scores
+        self.score_function = score_function
     return self
 
 
@@ -112,7 +124,7 @@ def evaluation_round(setup, epoch: int, epochs: int):
     return scan_loss, samples
 
 
-def training_round(setup, epoch: int, epochs: int):
+def training_round(setup, epoch: int, epochs: int, use_buffer: bool = False):
     round_loss = 0
     samples = []
     with Progress(transient=True) as progress:
@@ -123,11 +135,15 @@ def training_round(setup, epoch: int, epochs: int):
         for batched_data in setup.tdl:
             scan = batched_data["scan"].to(device=setup.device)
             segm = batched_data["segm"].to(device=setup.device, dtype=torch.int64)
+            if use_buffer:
+                keys = batched_data["keys"]
             batch_size = segm.size(0)
 
             setup.optimizer.zero_grad(set_to_none=True)
 
             pred = setup.model(scan)
+            if use_buffer:
+                scores = setup.score_function(pred, functional.one_hot(segm, 3).permute(0, 4, 1, 2, 3).to(dtype=torch.float32), keys=keys)
             loss = setup.loss_function(pred, functional.one_hot(segm, 3).permute(0, 4, 1, 2, 3).to(dtype=torch.float32))
             loss.backward()
             setup.optimizer.step()
@@ -141,11 +157,25 @@ def training_round(setup, epoch: int, epochs: int):
             progress.update(task, advance=batch_size)
 
     scan_loss = round_loss / len(setup.train_dataset)
+    if use_buffer:
+        return scan_loss, scores, samples
     return scan_loss, samples
 
 
-def train(setup, *, epochs: int = 400, models_path: Path):
+def train(setup, *, epochs: int = 400, resume_from=0, models_path: Path, use_buffer: bool = False):
     run = report.init(project="liver-tumor-detection", entity="yamatteo", backend="wandb", level="debug")
+
+    if isinstance(resume_from, str):
+        model_name = resume_from
+    elif isinstance(resume_from, int) and resume_from > 0:
+        model_name = f"checkpoint{resume_from:03}.pth"
+    else:
+        model_name = None
+    try:
+        setup.model.load_state_dict(torch.load(models_path / model_name, map_location=setup.device))
+        console.print(f"Model loaded from {models_path / model_name}")
+    except FileNotFoundError:
+        console.print(f"Model {models_path / model_name} does not exist. Starting with a new model.")
     try:
         for epoch in range(epochs):
             if epoch % 20 == 0:
@@ -161,7 +191,11 @@ def train(setup, *, epochs: int = 400, models_path: Path):
                 torch.save(setup.model.state_dict(), models_path / f"checkpoint{epoch:03}.pth")
             else:
                 setup.model.train()
-                scan_loss, samples = training_round(setup, epoch, epochs)
+                if use_buffer is True:
+                    scan_loss, scores, samples = training_round(setup, epoch, epochs, use_buffer=True)
+                    setup.training_dataset.drop(scores)
+                else:
+                    scan_loss, samples = training_round(setup, epoch, epochs, use_buffer=False)
                 console.print(
                     f"Training epoch {epoch + 1}/{epochs}. "
                     f"Loss per scan: {scan_loss:.2e}"

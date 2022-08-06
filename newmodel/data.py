@@ -1,4 +1,7 @@
 from __future__ import annotations
+
+import heapq
+import itertools
 from pathlib import Path
 
 import numpy as np
@@ -30,6 +33,40 @@ class Dataset(torch.utils.data.Dataset):
             return self.format(data)
         else:
             return data
+
+
+class BufferDataset(torch.utils.data.Dataset):
+    def __init__(self, path: Path, buffer_size: int, staging_size: int):
+        super(BufferDataset, self).__init__()
+        self.path = path
+        self.buffer_size = buffer_size
+        self.staging_size = staging_size
+        self.file_gen = itertools.cycle(enumerate(path.iterdir()))
+        self.buffer = {}
+
+
+    def __len__(self):
+        return self.buffer_size
+
+    def __getitem__(self, i: int):
+        k = list(self.buffer.keys())[i]
+        return {"keys": k, **self.buffer[k]}
+
+    def fill(self):
+        size = self.buffer_size
+        for _ in range(size):
+            if len(self.buffer) >= size:
+                break
+            k, path = next(self.file_gen)
+            if k not in self.buffer:
+                self.buffer[k] = torch.load(path)
+
+    def drop(self, scores: dict[int, float]):
+        highest = heapq.nlargest(self.staging_size, list(scores.keys()), lambda i: scores[i])
+        for k in highest:
+            del self.buffer[k]
+        self.fill()
+
 
 
 def store_441_dataset(source_path: Path, target_path: Path, slice_shape: tuple[int, int, int]):

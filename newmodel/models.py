@@ -215,5 +215,10 @@ class UNet(Module):
             ),
         )
 
+    def set_momentum(self, momentum: float):
+        for module in self.modules():
+            if isinstance(module, (nn.BatchNorm3d, nn.InstanceNorm3d)):
+                module.momentum = momentum
+
     def forward(self, x: Tensor) -> Tensor:
         return self.model(x)

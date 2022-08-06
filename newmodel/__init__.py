@@ -9,6 +9,7 @@ from adabelief_pytorch import AdaBelief
 from rich.console import Console
 from rich.progress import Progress
 from torch import nn
+from torch.nn import functional
 from torch.utils.data import DataLoader
 
 import report
@@ -72,7 +73,7 @@ def setup_train(dataset_path: Path, models_path: Path = "saved_models", model_na
         print_change_log=False,
     )
 
-    self.loss_function = nn.CrossEntropyLoss().to(device=device)
+    self.loss_function = nn.CrossEntropyLoss(torch.tensor([1, 5, 20])).to(device=device)
     return self
 
 
@@ -120,7 +121,7 @@ def training_round(setup, epoch: int, epochs: int):
             setup.optimizer.zero_grad(set_to_none=True)
 
             pred = setup.model(scan)
-            loss = setup.loss_function(pred, segm)
+            loss = setup.loss_function(pred, functional.one_hot(segm, 3).permute(0, 4, 1, 2, 3))
             loss.backward()
             setup.optimizer.step()
             round_loss += loss.item() * batch_size

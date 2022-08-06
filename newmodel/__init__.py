@@ -35,12 +35,17 @@ def setup_evaluation():
     return model, device
 
 
-def setup_train(dataset_path: Path, models_path: Path = "saved_models", model_name: str = "last.pth",
-                batch_size: int = 50, device=torch.device("cpu")):
+def setup_train(
+        dataset_path: Path,
+        models_path: Path = "saved_models",
+        model_name: str = "last.pth",
+        batch_size: int = 50,
+        device=torch.device("cpu"),
+        **kwargs):
     self = argparse.Namespace()
     self.device = device
 
-    self.model = UNet([4, 32, 48, 64])
+    self.model = UNet(**kwargs)
     self.model.to(device=device)
 
     try:
@@ -92,7 +97,8 @@ def evaluation_round(setup, epoch: int, epochs: int):
             batch_size = segm.size(0)
 
             pred = setup.model(scan)
-            round_loss += setup.loss_function(pred, functional.one_hot(segm, 3).permute(0, 4, 1, 2, 3).to(dtype=torch.float32)).item() * batch_size
+            round_loss += setup.loss_function(pred, functional.one_hot(segm, 3).permute(0, 4, 1, 2, 3).to(
+                dtype=torch.float32)).item() * batch_size
             samples.append(report.sample(
                 scan.detach().cpu().numpy(),
                 torch.argmax(pred.detach(), dim=1).cpu().numpy(),

@@ -92,7 +92,7 @@ def evaluation_round(setup, epoch: int, epochs: int):
             batch_size = segm.size(0)
 
             pred = setup.model(scan)
-            round_loss += setup.loss_function(pred, segm).item() * batch_size
+            round_loss += setup.loss_function(pred, functional.one_hot(segm, 3).permute(0, 4, 1, 2, 3).to(dtype=torch.float32)).item() * batch_size
             samples.append(report.sample(
                 scan.detach().cpu().numpy(),
                 torch.argmax(pred.detach(), dim=1).cpu().numpy(),
@@ -121,7 +121,7 @@ def training_round(setup, epoch: int, epochs: int):
             setup.optimizer.zero_grad(set_to_none=True)
 
             pred = setup.model(scan)
-            loss = setup.loss_function(pred, functional.one_hot(segm, 3).permute(0, 4, 1, 2, 3))
+            loss = setup.loss_function(pred, functional.one_hot(segm, 3).permute(0, 4, 1, 2, 3).to(dtype=torch.float32))
             loss.backward()
             setup.optimizer.step()
             round_loss += loss.item() * batch_size

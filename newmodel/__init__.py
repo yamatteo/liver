@@ -39,8 +39,9 @@ def setup_train(
         dataset_path: Path,
         models_path: Path = "saved_models",
         model_name: str = "last.pth",
-        batch_size: int = 50,
         device=torch.device("cpu"),
+        batch_size: int = 50,
+        lr: float = 1e-3,
         **kwargs):
     self = argparse.Namespace()
     self.device = device
@@ -70,7 +71,7 @@ def setup_train(
 
     self.optimizer = AdaBelief(
         self.model.parameters(),
-        lr=1e-3,
+        lr=lr,
         eps=1e-8,
         betas=(0.9, 0.999),
         weight_decouple=False,

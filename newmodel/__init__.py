@@ -214,21 +214,21 @@ def train(setup, *, epochs: int = 400, resume_from=0, models_path: Path, use_buf
 
 @torch.no_grad()
 def apply(model, case_path, device):
-    pooler = nn.AvgPool3d(kernel_size=(4, 4, 1))
-    unpooler = nn.Upsample(scale_factor=(4, 4, 1), mode='trilinear')
+    pooler = nn.AvgPool3d(kernel_size=(4, 4, 1)).to(device=device)
+    unpooler = nn.Upsample(scale_factor=(4, 4, 1), mode='trilinear').to(device=device)
     affine, bottom, top, height = nd.load_registration_data(case_path)
     scan = nd.load_scan_from_regs(case_path)
     scan = np.clip(scan, -1024, 1024)
     predictions = []
     for slice in scan_slices(scan, (512, 512, 32)):
-        slice = pooler(slice)
-        pred = model(torch.tensor(slice, dtype=torch.float32, device=device).unsqueeze(0))
-        pred = torch.argmax(pred, dim=1).to(dtype=torch.int16).cpu()
+        slice = pooler(torch.tensor(slice, dtype=torch.float32, device=device).unsqueeze(0))
+        pred = model(slice)
         pred = unpooler(pred)
+        pred = torch.argmax(pred, dim=1).to(dtype=torch.int16).squeeze().cpu()
         predictions.append(pred.cpu().numpy())
         del pred
         torch.cuda.empty_cache()
-    prediction = np.concatenate(predictions, axis=3)
+    prediction = np.concatenate(predictions, axis=2)
     pred = np.full([512, 512, height], fill_value=-1024, dtype=np.int16)
     pred[..., bottom:top] = prediction[..., :(top - bottom)]
     return pred, affine

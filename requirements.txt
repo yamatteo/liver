@@ -13,6 +13,7 @@ numpy
 pyelastix
 pyradiomics
 pytest
+python-dotenv
 rich
 seaborn
 seaborn_image

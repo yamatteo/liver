@@ -15,7 +15,7 @@ from torch.utils.data import DataLoader
 import report
 import utils.ndarray as nd
 import utils.path_explorer as px
-from utils.slices import overlapping_slices
+from utils.slices import overlapping_slices, padded_nonoverlapping_scan_slices as scan_slices
 from distances import liverscore, tumorscore
 from .hunet import HunetNetwork, HalfUNet
 from .data import store_441_dataset, Dataset, BufferDataset
@@ -27,12 +27,15 @@ saved_models.mkdir(exist_ok=True)
 
 
 def setup_evaluation():
-    raise NotImplemented
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model = HalfUNet()
+    model_kwargs = torch.load(saved_models / "last_model_kwargs.pt")
+    model = UNet(**model_kwargs)
     model.to(device=device)
-    model.resume(saved_models, "last_checkpoint.pth", device)
-    return model, device
+    model.load_state_dict(
+        torch.load(saved_models / "latest.pth", map_location=device)
+    )
+    console.print(f"Model loaded from {saved_models / 'latest.pth'}")
+    return argparse.Namespace(model=model, device=device)
 
 
 def setup_train(
@@ -48,6 +51,7 @@ def setup_train(
     self.device = device
 
     self.model = UNet(**kwargs)
+    self.model_kwargs = kwargs
     self.model.to(device=device)
 
     try:
@@ -189,6 +193,7 @@ def train(setup, *, epochs: int = 400, resume_from=0, models_path: Path, use_buf
                 report.append({"valid_epoch_loss": scan_loss, "samples": samples})
                 torch.save(setup.model.state_dict(), models_path / "last_checkpoint.pth")
                 torch.save(setup.model.state_dict(), models_path / f"checkpoint{epoch:03}.pth")
+                torch.save(setup.model_kwargs, models_path / "last_model_kwargs.pt")
             else:
                 setup.model.train()
                 if use_buffer is True:
@@ -209,21 +214,18 @@ def train(setup, *, epochs: int = 400, resume_from=0, models_path: Path, use_buf
 
 @torch.no_grad()
 def apply(model, case_path, device):
-    raise NotImplemented
     affine, bottom, top, height = nd.load_registration_data(case_path)
     scan = nd.load_scan_from_regs(case_path)
     scan = np.clip(scan, -1024, 1024)
-    pad = 40 - scan.shape[3] % 40
-    scan = np.pad(scan, ((0, 0), (0, 0), (0, 0), (0, pad)), constant_values=-1024)
-    scan = np.reshape(scan, [1, *scan.shape])
-    pred = np.concatenate([
-        model(torch.tensor(piece, dtype=torch.float32, device=device)).cpu().numpy()
-        for piece in overlapping_slices(scan, thickness=40, dim=4)
-    ], axis=3)
-    pred = np.argmax(pred, axis=1)[0]
-    _pred = np.full([512, 512, height], -1024)
-    _pred[..., bottom:top] = pred[..., :(top - bottom)]
-    return _pred, affine
+    predictions = []
+    for slice in scan_slices(scan, (512, 512, 32)):
+        pred = model(torch.tensor(slice, dtype=torch.float32, device=device))
+        pred = torch.argmax(pred, dim=1).to(dtype=torch.int16)
+        predictions.append(pred)
+    prediction = torch.cat(predictions, dim=3).cpu().numpy()
+    pred = np.full([512, 512, height], fill_value=-1024, dtype=np.int16)
+    pred[..., bottom:top] = prediction[..., :(top - bottom)]
+    return pred, affine
 
 
 def predict_case(model, case_path, device):

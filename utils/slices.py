@@ -41,6 +41,17 @@ def bundle_pad_z(t: ndarray, shape: tuple[int, int, int]) -> ndarray:
     else:
         return t
 
+def scan_pad_z(t: ndarray, shape: tuple[int, int, int]) -> ndarray:
+    shape = (4, *shape)
+    assert t.shape[:-1] == shape[:-1]
+    z_pad = t.shape[3] - shape[3]
+    if z_pad > 0:
+        fill = np.array([-1024, -1024, -1024, -1024]).reshape((4, 1, 1, 1))
+        fill = np.tile(fill, (1, shape[1], shape[2], z_pad))
+        return np.concatenate([t, fill], axis=3)
+    else:
+        return t
+
 
 def fixed_shape_slices(t: ndarray, shape: tuple[int, int, int], dims: tuple[int, int, int]) -> Iterator[ndarray]:
     if shape is None:
@@ -61,6 +72,17 @@ def padded_nonoverlapping_bundle_slices(t: ndarray, shape: tuple[int, int, int])
         for y in nonoverlapping_slices(x, shape[1], 2):
             for z in nonoverlapping_slices(y, shape[2], 3):
                 yield bundle_pad_z(z, shape)
+
+
+def padded_nonoverlapping_scan_slices(t: ndarray, shape: tuple[int, int, int]) -> Iterator[ndarray]:
+    assert t.ndim == 4  # [C=4, X, Y, Z]
+    if shape is None:
+        yield t
+        return
+    for x in nonoverlapping_slices(t, shape[0], 1):
+        for y in nonoverlapping_slices(x, shape[1], 2):
+            for z in nonoverlapping_slices(y, shape[2], 3):
+                yield scan_pad_z(z, shape)
 
 
 def padded_overlapping_bundle_slices(t: ndarray, shape: tuple[int, int, int]) -> Iterator[ndarray]:

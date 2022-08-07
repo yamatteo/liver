@@ -52,7 +52,7 @@ def build_tv(state, inject, project, biject):
             elif command == "rgb":
                 content = load_rgbscan(state.case_path)
             elif command == "segm":
-                content = load_segm(state.case_path)
+                content = load_segm(state.case_path, "segmentation")
             elif command == "pred":
                 content = load_segm(state.case_path, "prediction")
             elif command == "lerr":
@@ -129,7 +129,7 @@ def load_rgbscan(case_path):
 
 def load_segm(case_path, what: str = "segmentation"):
     white = utils.ndarray.load_registered(case_path, phase="v")
-    segm = utils.ndarray.load_segm(case_path)
+    segm = utils.ndarray.load_segm(case_path, what)
     assert white.shape[2] == segm.shape[2], "Segmentation and registered phase v have different height"
     white = white.clip(0, 255) / 255
     red = (segm == 1).astype(float)

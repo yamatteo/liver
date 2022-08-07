@@ -20,28 +20,28 @@ class ButtonGenerator:
     register_all = Button(layout=Layout(width='auto'))
 
     april_one = Button(
-        description="Apply april's newmodel",
+        description="Apply april's model",
         layout=Layout(width='auto')
     )
     april_all = Button(
-        description="Apply april's newmodel to all",
+        description="Apply april's model to all",
         layout=Layout(width='auto')
     )
     april_evaluate = Button(
-        description="Evaluate april's newmodel",
+        description="Evaluate april's model",
         layout=Layout(width='auto')
     )
 
     july_one = Button(
-        description="Apply july's newmodel",
+        description="Apply july's model",
         layout=Layout(width='auto')
     )
     july_all = Button(
-        description="Apply july's newmodel to all",
+        description="Apply july's model to all",
         layout=Layout(width='auto')
     )
     july_evaluate = Button(
-        description="Evaluate july's newmodel",
+        description="Evaluate july's model",
         layout=Layout(width='auto')
     )
 

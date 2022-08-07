@@ -35,7 +35,7 @@ def setup_evaluation():
         torch.load(saved_models / "latest.pth", map_location=device)
     )
     console.print(f"Model loaded from {saved_models / 'latest.pth'}")
-    return argparse.Namespace(model=model, device=device)
+    return model, device
 
 
 def setup_train(
@@ -214,15 +214,21 @@ def train(setup, *, epochs: int = 400, resume_from=0, models_path: Path, use_buf
 
 @torch.no_grad()
 def apply(model, case_path, device):
+    pooler = nn.AvgPool3d(kernel_size=(4, 4, 1))
+    unpooler = nn.Upsample(scale_factor=(4, 4, 1), mode='trilinear')
     affine, bottom, top, height = nd.load_registration_data(case_path)
     scan = nd.load_scan_from_regs(case_path)
     scan = np.clip(scan, -1024, 1024)
     predictions = []
     for slice in scan_slices(scan, (512, 512, 32)):
-        pred = model(torch.tensor(slice, dtype=torch.float32, device=device))
-        pred = torch.argmax(pred, dim=1).to(dtype=torch.int16)
-        predictions.append(pred)
-    prediction = torch.cat(predictions, dim=3).cpu().numpy()
+        slice = pooler(slice)
+        pred = model(torch.tensor(slice, dtype=torch.float32, device=device).unsqueeze(0))
+        pred = torch.argmax(pred, dim=1).to(dtype=torch.int16).cpu()
+        pred = unpooler(pred)
+        predictions.append(pred.cpu().numpy())
+        del pred
+        torch.cuda.empty_cache()
+    prediction = np.concatenate(predictions, axis=3)
     pred = np.full([512, 512, height], fill_value=-1024, dtype=np.int16)
     pred[..., bottom:top] = prediction[..., :(top - bottom)]
     return pred, affine
@@ -283,7 +289,7 @@ def evaluate_all_folders(base_path: Path):
         case_in="  [bold black]{case}.[/bold black] Evaluating...",
         case_out="  ...completed.",
     )(evaluate)
-    with open("july_evaluation.pickle", "wb") as f:
+    with open("newmodel_evaluation.pickle", "wb") as f:
         pickle.dump(evaluations, f)
     console.print("Mean liver score:", sum(item["liver"] for item in evaluations.values()) / len(evaluations))
     console.print("Mean tumor score:", sum(item["tumor"] for item in evaluations.values()) / len(evaluations))

@@ -85,12 +85,15 @@ def get_new_interface():
                 case_dropdown,
                 buttons.april_one,
                 buttons.july_one,
+                buttons.newmodel_one,
                 HTML("<h4>Operations on the whole utils</h4>"),
                 buttons.april_all,
                 buttons.july_all,
+                buttons.newmodel_all,
                 HTML("<h4>Evaluation</h4>"),
                 buttons.april_evaluate,
                 buttons.july_evaluate,
+                buttons.newmodel_evaluate,
             ]),
             VBox([
                 console

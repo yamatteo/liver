@@ -33,7 +33,7 @@ def nonoverlapping_slices(t: ndarray, thickness: int, dim: int) -> Iterator[ndar
 def bundle_pad_z(t: ndarray, shape: tuple[int, int, int]) -> ndarray:
     shape = (5, *shape)
     assert t.shape[:-1] == shape[:-1]
-    z_pad = t.shape[3] - shape[3]
+    z_pad = shape[3] - t.shape[3]
     if z_pad > 0:
         fill = np.array([-1024, -1024, -1024, -1024, 0]).reshape((5, 1, 1, 1))
         fill = np.tile(fill, (1, shape[1], shape[2], z_pad))
@@ -44,7 +44,7 @@ def bundle_pad_z(t: ndarray, shape: tuple[int, int, int]) -> ndarray:
 def scan_pad_z(t: ndarray, shape: tuple[int, int, int]) -> ndarray:
     shape = (4, *shape)
     assert t.shape[:-1] == shape[:-1]
-    z_pad = t.shape[3] - shape[3]
+    z_pad = shape[3] - t.shape[3]
     if z_pad > 0:
         fill = np.array([-1024, -1024, -1024, -1024]).reshape((4, 1, 1, 1))
         fill = np.tile(fill, (1, shape[1], shape[2], z_pad))

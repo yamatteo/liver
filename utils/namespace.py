@@ -3,6 +3,11 @@ from utils.debug import dbg
 
 
 class Namespace(SimpleNamespace):
+    def __init__(self, *args, **kwargs):
+        for arg in args:
+            self.__dict__.update(arg)
+        self.__dict__.update(kwargs)
+
     def __getattribute__(self, item):
         try:
             return SimpleNamespace.__getattribute__(self, item)
@@ -17,7 +22,6 @@ class Namespace(SimpleNamespace):
 
     def __getitem__(self, item):
         return SimpleNamespace.__getattribute__(self, item)
-
 
     def __repr__(self):
         return repr(vars(self))

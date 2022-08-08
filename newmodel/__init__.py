@@ -15,6 +15,7 @@ from torch.utils.data import DataLoader
 import report
 import utils.ndarray as nd
 import utils.path_explorer as px
+from utils.debug import dbg
 from utils.slices import overlapping_slices, padded_nonoverlapping_scan_slices as scan_slices
 from distances import liverscore, tumorscore
 from .hunet import HunetNetwork, HalfUNet
@@ -160,26 +161,17 @@ def training_round(setup, epoch: int, epochs: int, use_buffer: bool = False):
 
             progress.update(task, advance=batch_size)
 
+    dbg(setup.train_dataset)
     scan_loss = round_loss / len(setup.train_dataset)
     if use_buffer:
         return scan_loss, scores, samples
     return scan_loss, samples
 
 
-def train(setup, *, epochs: int = 400, resume_from=0, models_path: Path, use_buffer: bool = False):
+def train(setup, *, epochs: int = 21):
     run = report.init(project="liver-tumor-detection", entity="yamatteo", backend="wandb", level="debug")
-
-    if isinstance(resume_from, str):
-        model_name = resume_from
-    elif isinstance(resume_from, int) and resume_from > 0:
-        model_name = f"checkpoint{resume_from:03}.pth"
-    else:
-        model_name = None
-    try:
-        setup.model.load_state_dict(torch.load(models_path / model_name, map_location=setup.device))
-        console.print(f"Model loaded from {models_path / model_name}")
-    except FileNotFoundError:
-        console.print(f"Model {models_path / model_name} does not exist. Starting with a new model.")
+    models_path = setup.models_path
+    use_buffer = isinstance(setup.buffer_size, int) and setup.buffer_size > 0
     try:
         for epoch in range(epochs):
             if epoch % 20 == 0:
@@ -193,7 +185,6 @@ def train(setup, *, epochs: int = 400, resume_from=0, models_path: Path, use_buf
                 report.append({"valid_epoch_loss": scan_loss, "samples": samples})
                 torch.save(setup.model.state_dict(), models_path / "last_checkpoint.pth")
                 torch.save(setup.model.state_dict(), models_path / f"checkpoint{epoch:03}.pth")
-                torch.save(setup.model_kwargs, models_path / "last_model_kwargs.pt")
             else:
                 setup.model.train()
                 if use_buffer is True:

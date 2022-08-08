@@ -43,6 +43,7 @@ class BufferDataset(torch.utils.data.Dataset):
         self.staging_size = staging_size
         self.file_gen = itertools.cycle(enumerate(path.iterdir()))
         self.buffer = {}
+        self.fill()
 
 
     def __len__(self):

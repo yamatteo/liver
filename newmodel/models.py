@@ -203,11 +203,11 @@ class Layer(Module):
 
 
 class UNet(Module):
-    def __init__(self, channels: list[int], down_normalization=""):
+    def __init__(self, channels: list[int], down_normalization="", up_dropout="", **kwargs):
         super().__init__()
 
         self.model = nn.Sequential(
-            Layer(channels=channels, down_normalization=down_normalization),
+            Layer(channels=channels, down_normalization=down_normalization, up_dropout=up_dropout),
             nn.Conv3d(
                 in_channels=channels[1],
                 out_channels=3,

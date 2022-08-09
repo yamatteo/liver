@@ -1,17 +1,16 @@
 from __future__ import annotations
 
-import math
+from typing import Optional
 
-import numpy as np
 import torch
-from rich.progress import Progress
 from torch import nn, Tensor
 from torch.nn import Module, functional
 
-from utils.debug import dbg, unique_debug
+from utils.debug import unique_debug, dbg
+from .models import Layer as Layer3d
 
 
-def actv_layer(actv: str, **_) -> Module | None:
+def actv_layer(actv: str) -> Optional[Module]:
     """Return required activation layer."""
     if actv == "relu":
         return nn.ReLU(True)
@@ -24,64 +23,98 @@ def actv_layer(actv: str, **_) -> Module | None:
     return None
 
 
-def norm_layer(norm: str, channels: int, momentum: float = 0.9, affine: bool = False) -> Module | None:
+def norm_layer(norm: str, channels: int, momentum: float, affine: bool) -> Optional[Module]:
     """Return required normalization layer."""
     if norm == "batch":
-        return nn.BatchNorm3d(num_features=channels, momentum=momentum, affine=affine)
+        return nn.BatchNorm2d(num_features=channels, momentum=momentum, affine=affine)
     if norm == "instance":
+        return nn.InstanceNorm2d(num_features=channels, momentum=momentum, affine=affine)
+    if norm == "batch3d":
+        return nn.BatchNorm3d(num_features=channels, momentum=momentum, affine=affine)
+    if norm == "instance3d":
         return nn.InstanceNorm3d(num_features=channels, momentum=momentum, affine=affine)
     return None
 
 
-def drop_layer(drop: str, drop_prob: float = 0.5) -> Module | None:
+def drop_layer(drop: str, drop_prob: float = 0.5) -> Optional[Module]:
     """Return required dropout layer."""
     if drop == "drop":
-        return nn.Dropout3d(p=drop_prob, inplace=True)
+        return nn.Dropout2d(p=drop_prob, inplace=True)
     return None
 
 
 def conv_layer(in_channels: int, out_channels: int) -> Module:
     """Return required convolution layer."""
-    return nn.Conv3d(
+    return nn.Conv2d(
         in_channels=in_channels,
         out_channels=out_channels,
-        kernel_size=(3, 3, 3),
+        kernel_size=(3, 3),
         padding=1,
     )
 
 
-def pool_layer(pool: str) -> Module | None:
+def pool_layer(pool: str) -> Optional[Module]:
     """Return required pooling layer."""
     if pool == "max22":
         return nn.MaxPool2d(kernel_size=(2, 2))
-    if pool == "max222":
-        return nn.MaxPool3d(kernel_size=(2, 2, 2))
-    if pool == "max221":
-        return nn.MaxPool3d(kernel_size=(2, 2, 1))
-    if pool == "avg222":
-        return nn.AvgPool3d(kernel_size=(2, 2, 2))
-    if pool == "avg441":
-        return nn.AvgPool3d(kernel_size=(4, 4, 1))
+    if pool == "avg22":
+        return nn.AvgPool2d(kernel_size=(2, 2))
+    if pool == "avg44":
+        return nn.AvgPool2d(kernel_size=(4, 4))
     return None
 
 
-def unpool_layer(pool: str) -> Module | None:
+def unpool_layer(pool: str) -> Optional[Module]:
     """Return required upsampling layer."""
     if pool == "max22":
         return nn.Upsample(scale_factor=(2, 2), mode='nearest')
-    if pool == "max222":
-        return nn.Upsample(scale_factor=(2, 2, 2), mode='nearest')
-    if pool == "max221":
-        return nn.Upsample(scale_factor=(2, 2, 1), mode='nearest')
-    if pool == "avg222":
-        return nn.Upsample(scale_factor=(2, 2, 2), mode='trilinear')
-    if pool == "avg441":
-        return nn.Upsample(scale_factor=(4, 4, 1), mode='trilinear')
+    if pool == "avg22":
+        return nn.Upsample(scale_factor=(2, 2), mode='bilinear')
+    if pool == "avg44":
+        return nn.Upsample(scale_factor=(4, 4), mode='bilinear')
     return None
 
 
+class Funnel(Module):
+    """Initial convolution block for a 3D -> 2D UNet."""
+
+    def __init__(
+            self,
+            in_channels: int,
+            out_channels: int,
+            complexity: int,
+            funnel_size: int,
+    ):
+        super(Funnel, self).__init__()
+        self.repr = f"Funnel({'>'.join([str(in_channels), *([str(out_channels)] * complexity), str(out_channels)])}" \
+                    f"{'>' + 'leaky'}" \
+                    f"{'>' + 'instance'}" \
+                    f")"
+
+        # noinspection PyTypeChecker
+        layers = [
+                     nn.Conv3d(in_channels, out_channels, (3, 3, 3), padding=1)
+                 ] + [
+                     nn.LeakyReLU(True),
+                     nn.Conv3d(out_channels, out_channels, (3, 3, 3), padding=1)
+                 ] * complexity + [
+                     nn.LeakyReLU(True),
+                     nn.Conv3d(out_channels, out_channels, (3, 3, funnel_size), padding=(1, 1, funnel_size))
+                 ] + [
+                     nn.InstanceNorm3d(out_channels, momentum=0.9),
+                 ]
+        self.model = nn.Sequential(*[lyr for lyr in layers if lyr is not None])
+
+    def __repr__(self):
+        return self.repr
+
+    def forward(self, x: Tensor) -> Tensor:
+        # shape goes from [N, inC, X, Y, Z] to [N, outC, X, Y]
+        return self.model(x).squeeze(-1)
+
+
 class Block(Module):
-    """Base convolution block for 3D Unet."""
+    """Base convolution block for 2D Unet."""
 
     def __init__(
             self,
@@ -112,7 +145,7 @@ class Block(Module):
                          out_channels=out_channels
                      )
                  ] * complexity + [
-                     norm_layer(norm=norm, channels=out_channels),
+                     norm_layer(norm=norm, channels=out_channels, affine=False, momentum=0.9),
                      drop_layer(drop=drop)
                  ]
         self.model = nn.Sequential(*[lyr for lyr in layers if lyr is not None])
@@ -125,7 +158,7 @@ class Block(Module):
 
 
 class Layer(Module):
-    """UNet convolution, down-sampling and skip connection layer."""
+    """UNet2D convolution, down-sampling and skip connection layer."""
 
     def __init__(
             self,
@@ -140,31 +173,27 @@ class Layer(Module):
             up_activation: str = "relu",
             up_normalization: str = "",
             up_dropout: str = "",
-            pool: str = "max222"
+            pool: str = "max22",
+            funnel_size: int = 0,
     ):
         super().__init__()
         self.level = len(channels) - 2
-        self.repr = f"Layer(" \
-                    f"channels={channels!r}, " \
-                    f"complexity={complexity}, " \
-                    f"down_activation={down_activation!r}, " \
-                    f"down_normalization={down_normalization!r}, " \
-                    f"down_dropout={down_dropout!r}" \
-                    f"bottom_activation={bottom_activation!r}, " \
-                    f"bottom_normalization={bottom_normalization!r}, " \
-                    f"bottom_dropout={bottom_dropout!r}" \
-                    f"up_activation={up_activation!r}, " \
-                    f"up_normalization={up_normalization!r}, " \
-                    f"up_dropout={up_dropout!r}" \
-                    f")"
-        self.block = Block(
-            in_channels=channels[0],
-            out_channels=channels[1],
-            complexity=complexity,
-            actv=down_activation if len(channels) > 2 else bottom_activation,
-            norm=down_normalization if len(channels) > 2 else bottom_normalization,
-            drop=down_dropout if len(channels) > 2 else bottom_dropout,
-        )
+        if funnel_size != 0:
+            self.block = Funnel(
+                in_channels=channels[0],
+                out_channels=channels[1],
+                complexity=complexity - 1,
+                funnel_size=funnel_size,
+            )
+        else:
+            self.block = Block(
+                in_channels=channels[0],
+                out_channels=channels[1],
+                complexity=complexity,
+                actv=down_activation if len(channels) > 2 else bottom_activation,
+                norm=down_normalization if len(channels) > 2 else bottom_normalization,
+                drop=down_dropout if len(channels) > 2 else bottom_dropout,
+            )
         if len(channels) > 2:
             self.pool = pool_layer(pool)
             self.submodule = Layer(
@@ -191,9 +220,6 @@ class Layer(Module):
                 drop=up_dropout
             )
 
-    # def __repr__(self):
-    #     return self.repr
-
     def forward(self, x: Tensor) -> Tensor:
         with unique_debug(f"layer {self.level}"):
             dbg(x.shape)
@@ -217,33 +243,50 @@ class Layer(Module):
                 return y
             except AttributeError:
                 return x
-        # y = self.block(x)
-        # try:
-        #     z = self.unpool(self.submodule(self.pool(y)))
-        #     zpad = y.size(-1) - z.size(-1)
-        #     z = functional.pad(z, [0, zpad])
-        #     return self.upconv(torch.cat([y, z], dim=1))
-        # except AttributeError:
-        #     return y
 
 
-class UNet(Module):
-    def __init__(self, channels: list[int], down_normalization="", up_dropout="", **kwargs):
+class FUNet(Module):
+    def __init__(
+            self,
+            funnel_channels: list[int],
+            funnel_size: int,
+            downsampled_channels: list[int],
+            down_normalization="",
+            up_dropout="",
+            **kwargs
+    ):
         super().__init__()
 
-        self.model = nn.Sequential(
-            Layer(channels=channels, down_normalization=down_normalization, up_dropout=up_dropout),
-            nn.Conv3d(
-                in_channels=channels[1],
-                out_channels=3,
-                kernel_size=(1, 1, 1),
+        self.funnel_model = nn.Sequential(
+            Layer(
+                channels=funnel_channels,
+                down_normalization=down_normalization,
+                up_dropout=up_dropout,
+                funnel_size=funnel_size,
             ),
+            nn.Conv2d(
+                in_channels=funnel_channels[1],
+                out_channels=3,
+                kernel_size=(1, 1),
+            ),
+        )
+        self.downsampled_model = Layer3d(
+            channels=downsampled_channels,
+            down_normalization=down_normalization,
+            up_dropout=up_dropout,
+        )
+        self.downsampled_early_exit = nn.Conv3d(
+            in_channels=downsampled_channels[1],
+            out_channels=3,
+            kernel_size=(1, 1, 1),
         )
 
     def set_momentum(self, momentum: float):
         for module in self.modules():
-            if isinstance(module, (nn.BatchNorm3d, nn.InstanceNorm3d)):
+            if isinstance(module, (nn.BatchNorm2d, nn.InstanceNorm2d, nn.BatchNorm3d, nn.InstanceNorm3d)):
                 module.momentum = momentum
 
-    def forward(self, x: Tensor) -> Tensor:
-        return self.model(x)
+    def dx_forward(self, x: Tensor) -> Tensor:
+        x = self.downsampled_model(x)
+        x = self.downsampled_early_exit(x)
+        return x

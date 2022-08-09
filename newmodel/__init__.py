@@ -1,4 +1,5 @@
 import argparse
+import os.path
 import pickle
 from pathlib import Path
 
@@ -39,65 +40,57 @@ def setup_evaluation():
     return model, device
 
 
-def setup_train(
-        dataset_path: Path,
-        buffer_size: int = 0,
-        models_path: Path = "saved_models",
-        model_name: str = "last.pth",
-        device=torch.device("cpu"),
-        batch_size: int = 50,
-        lr: float = 1e-3,
-        **kwargs):
-    self = argparse.Namespace()
-    self.device = device
-
-    self.model = UNet(**kwargs)
-    self.model_kwargs = kwargs
-    self.model.to(device=device)
-
-    try:
-        self.model.load_state_dict(torch.load(models_path / model_name, map_location=device))
-        console.print(f"Model loaded from {models_path / model_name}")
-    except FileNotFoundError:
-        console.print(f"Model {models_path / model_name} does not exist. Starting with a new model.")
-
-    if buffer_size > 0:
-        self.train_dataset = BufferDataset(dataset_path / "train", buffer_size, buffer_size // 10)
-    else:
-        self.train_dataset = Dataset(dataset_path / "train")
-    self.valid_dataset = Dataset(dataset_path / "valid")
-
-    self.tdl = DataLoader(
-        self.train_dataset,
-        pin_memory=True,
-        batch_size=batch_size,
-    )
-    self.vdl = DataLoader(
-        self.valid_dataset,
-        pin_memory=True,
-        batch_size=batch_size,
-    )
-
-    self.optimizer = AdaBelief(
-        self.model.parameters(),
-        lr=lr,
-        eps=1e-8,
-        betas=(0.9, 0.999),
-        weight_decouple=False,
-        rectify=False,
-        print_change_log=False,
-    )
-
-    self.loss_function = nn.CrossEntropyLoss(torch.tensor([1, 2, 5])).to(device=device)
-    if buffer_size > 0:
-        m = nn.CrossEntropyLoss(torch.tensor([1, 2, 5]), reduction="none").to(device=device)
-        def score_function(pred, segm, keys):
-            loss = m(pred, segm)
-            loss = torch.mean(loss, dim=[1, 2, 3])
-            scores = {k.item(): loss[i].item() for i, k in enumerate(keys)}
-            return scores
-        self.score_function = score_function
-    return self
+# def setup_train(dataset_path: Path, buffer_size: int = 0, models_path: Path = "saved_models", model_name: str = "last.pth", device=torch.device("cpu"), batch_size: int = 50, lr: float = 1e-3, **kwargs):
+#     self = argparse.Namespace()
+#     self.device = device
+#
+#     self.model = UNet(**kwargs)
+#     self.model_kwargs = kwargs
+#     self.model.to(device=device)
+#
+#     try:
+#         self.model.load_state_dict(torch.load(models_path / model_name, map_location=device))
+#         console.print(f"Model loaded from {models_path / model_name}")
+#     except FileNotFoundError:
+#         console.print(f"Model {models_path / model_name} does not exist. Starting with a new model.")
+#
+#     if buffer_size > 0:
+#         self.train_dataset = BufferDataset(dataset_path / "train", buffer_size, buffer_size // 10)
+#     else:
+#         self.train_dataset = Dataset(dataset_path / "train")
+#     self.valid_dataset = Dataset(dataset_path / "valid")
+#
+#     self.tdl = DataLoader(
+#         self.train_dataset,
+#         pin_memory=True,
+#         batch_size=batch_size,
+#     )
+#     self.vdl = DataLoader(
+#         self.valid_dataset,
+#         pin_memory=True,
+#         batch_size=batch_size,
+#     )
+#
+#     self.optimizer = AdaBelief(
+#         self.model.parameters(),
+#         lr=lr,
+#         eps=1e-8,
+#         betas=(0.9, 0.999),
+#         weight_decouple=False,
+#         rectify=False,
+#         print_change_log=False,
+#     )
+#
+#     self.loss_function = nn.CrossEntropyLoss(torch.tensor([1, 2, 5])).to(device=device)
+#     if buffer_size > 0:
+#         m = nn.CrossEntropyLoss(torch.tensor([1, 2, 5]), reduction="none").to(device=device)
+#         def score_function(pred, segm, keys):
+#             loss = m(pred, segm)
+#             loss = torch.mean(loss, dim=[1, 2, 3])
+#             scores = {k.item(): loss[i].item() for i, k in enumerate(keys)}
+#             return scores
+#         self.score_function = score_function
+#     return self
 
 
 @torch.no_grad()
@@ -204,6 +197,7 @@ def train(setup, *, epochs: int = 21):
 
 @torch.no_grad()
 def apply(model, case_path, device):
+    # TODO clip
     pooler = nn.AvgPool3d(kernel_size=(4, 4, 1)).to(device=device)
     unpooler = nn.Upsample(scale_factor=(4, 4, 1), mode='trilinear').to(device=device)
     affine, bottom, top, height = nd.load_registration_data(case_path)
@@ -222,7 +216,6 @@ def apply(model, case_path, device):
     pred = np.full([512, 512, height], fill_value=-1024, dtype=np.int16)
     pred[..., bottom:top] = prediction[..., :(top - bottom)]
     return pred, affine
-
 
 def predict_case(model, case_path, device):
     prediction, affine_matrix = apply(model, case_path, device)

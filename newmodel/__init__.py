@@ -16,7 +16,7 @@ import report
 import utils.ndarray as nd
 import utils.path_explorer as px
 from utils.debug import dbg
-from utils.slices import overlapping_slices, padded_nonoverlapping_scan_slices as scan_slices
+from utils.slices import slices, padded_nonoverlapping_scan_slices as scan_slices
 from distances import liverscore, tumorscore
 from .hunet import HunetNetwork, HalfUNet
 from .data import store_441_dataset, Dataset, BufferDataset
@@ -161,7 +161,6 @@ def training_round(setup, epoch: int, epochs: int, use_buffer: bool = False):
 
             progress.update(task, advance=batch_size)
 
-    dbg(setup.train_dataset)
     scan_loss = round_loss / len(setup.train_dataset)
     if use_buffer:
         return scan_loss, scores, samples
@@ -211,7 +210,7 @@ def apply(model, case_path, device):
     scan = nd.load_scan_from_regs(case_path)
     scan = np.clip(scan, -1024, 1024)
     predictions = []
-    for slice in scan_slices(scan, (512, 512, 32)):
+    for slice in slices(scan, (512, 512, 16), overlap=False, pad_seed="scan"):
         slice = pooler(torch.tensor(slice, dtype=torch.float32, device=device).unsqueeze(0))
         pred = model(slice)
         pred = unpooler(pred)

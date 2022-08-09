@@ -19,3 +19,6 @@ seaborn
 seaborn_image
 torch
 wandb
+
+varname
+asttokens

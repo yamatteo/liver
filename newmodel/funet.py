@@ -286,6 +286,9 @@ class FUNet(Module):
             if isinstance(module, (nn.BatchNorm2d, nn.InstanceNorm2d, nn.BatchNorm3d, nn.InstanceNorm3d)):
                 module.momentum = momentum
 
+    def af_forward(self, x: Tensor, aid: Tensor) -> Tensor:
+        return self.funnel_model(torch.cat([x, aid], dim=1))
+
     def dx_forward(self, x: Tensor) -> Tensor:
         x = self.downsampled_model(x)
         x = self.downsampled_early_exit(x)

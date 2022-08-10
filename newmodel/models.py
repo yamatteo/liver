@@ -195,28 +195,19 @@ class Layer(Module):
     #     return self.repr
 
     def forward(self, x: Tensor) -> Tensor:
-        with unique_debug(f"layer {self.level}"):
-            dbg(x.shape)
-            x = self.block(x)
-            dbg("block", x.shape)
-            try:
-                original_z_size = x.size(-1)
-                y = self.pool(x)
-                dbg("pool", y.shape)
-                y = self.submodule(y)
-                dbg("submodule", y.shape)
-                y = self.unpool(y)
-                dbg("unpool", y.shape)
-                z_pad = original_z_size - y.size(-1)
-                y = functional.pad(y, [0, z_pad])
-                dbg("pad", y.shape)
-                y = torch.cat([y, x], dim=1)
-                dbg("skip connection", y.shape)
-                y = self.upconv(y)
-                dbg("upconv", y.shape)
-                return y
-            except AttributeError:
-                return x
+        x = self.block(x)
+        try:
+            original_z_size = x.size(-1)
+            y = self.pool(x)
+            y = self.submodule(y)
+            y = self.unpool(y)
+            z_pad = original_z_size - y.size(-1)
+            y = functional.pad(y, [0, z_pad])
+            y = torch.cat([y, x], dim=1)
+            y = self.upconv(y)
+            return y
+        except AttributeError:
+            return x
         # y = self.block(x)
         # try:
         #     z = self.unpool(self.submodule(self.pool(y)))

@@ -3,6 +3,7 @@ from __future__ import annotations
 import heapq
 import itertools
 from pathlib import Path
+from typing import Iterator
 
 import numpy as np
 import torch
@@ -45,7 +46,6 @@ class BufferDataset(torch.utils.data.Dataset):
         self.buffer = {}
         self.fill()
 
-
     def __len__(self):
         return len(self.buffer)
 
@@ -68,6 +68,35 @@ class BufferDataset(torch.utils.data.Dataset):
             del self.buffer[k]
         self.fill()
 
+
+class GeneratorDataset(torch.utils.data.Dataset):
+    def __init__(self, generator: Iterator[dict], buffer_size: int, staging_size: int):
+        super(GeneratorDataset, self).__init__()
+        self.generator = itertools.cycle(enumerate(generator))
+        self.buffer = {}
+        self.buffer_size = buffer_size
+        self.staging_size = staging_size
+
+    def __len__(self):
+        return len(self.buffer)
+
+    def __getitem__(self, i: int):
+        k = list(self.buffer.keys())[i]
+        return {"keys": k, **self.buffer[k]}
+
+    def fill(self):
+        size = self.buffer_size
+        for _ in range(size):
+            if len(self.buffer) >= size:
+                break
+            k, data = next(self.generator)
+            self.buffer[k] = data
+
+    def drop(self, scores: dict[int, float]):
+        smallest = heapq.nsmallest(self.staging_size, list(scores.keys()), lambda i: scores[i])
+        for k in smallest:
+            del self.buffer[k]
+        self.fill()
 
 
 def store_441_dataset(source_path: Path, target_path: Path, slice_shape: tuple[int, int, int]):

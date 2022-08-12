@@ -2,6 +2,7 @@ import os
 import subprocess
 from pathlib import Path
 
+import torch.cuda
 from dotenv import load_dotenv
 
 from utils.namespace import Namespace
@@ -28,7 +29,7 @@ def reset_environment(environment=None):
         sources_path = "/content/drive/MyDrive/COLAB"
         liver_path = "/content/liver"
         dataset_path = "/content/dataset"
-        models_path = "/content/saved_models"
+        models_path = "/content/drive/MyDrive/saved_models"
     else:
         raise ValueError(f"Unexpected environemnt {environment!r}")
 
@@ -66,6 +67,7 @@ def get_env():
         liver_path=Path(os.getenv("LIVER_PATH")),
         dataset_path=Path(os.getenv("DATASET_PATH")),
         models_path=Path(os.getenv("MODELS_PATH")),
+        device=torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu"),
     )
     for name, path in vars(opts).items():
         assert path.exists(), f"Path for {name} ({path}) does not exist."

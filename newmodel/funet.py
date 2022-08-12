@@ -99,7 +99,7 @@ class Funnel(Module):
                      nn.Conv3d(out_channels, out_channels, (3, 3, 3), padding=1)
                  ] * complexity + [
                      nn.LeakyReLU(True),
-                     nn.Conv3d(out_channels, out_channels, (3, 3, funnel_size), padding=(1, 1, funnel_size))
+                     nn.Conv3d(out_channels, out_channels, (3, 3, funnel_size), padding=(1, 1, 0))
                  ] + [
                      nn.InstanceNorm3d(out_channels, momentum=0.9),
                  ]

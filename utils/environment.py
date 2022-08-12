@@ -67,9 +67,9 @@ def get_env():
         liver_path=Path(os.getenv("LIVER_PATH")),
         dataset_path=Path(os.getenv("DATASET_PATH")),
         models_path=Path(os.getenv("MODELS_PATH")),
-        device=torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu"),
     )
     for name, path in vars(opts).items():
         assert path.exists(), f"Path for {name} ({path}) does not exist."
 
+    opts = Namespace(opts, device=torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu"))
     return opts

@@ -45,7 +45,7 @@ def stepping_indices(length: int, size: int) -> Iterator[int]:
        #######
         #######
     """
-    yield from range(0, size - length)
+    yield from range(0, 1 + size - length)
 
 
 def _dim_slices(t: Tensor, *, dim: int, length: int, mode: str) -> Iterator[Tensor]:

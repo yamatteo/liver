@@ -171,13 +171,14 @@ def with_neighbours(x: torch.Tensor, minimum = 1, kernel_size = (9, 9, 3)):
 def set_difference(self, other):
     return torch.clamp((self - other), 0, 1).to(dtype=torch.int16)
 
-def masks(segm: torch.Tensor):
+def masks(segm: np.ndarray):
+    segm = torch.tensor(segm, dtype=torch.int16)
     orig_liver = (segm == 1).to(dtype=torch.int16)
     tumor = (segm == 2).to(dtype=torch.int16)
     ext_tumor = with_neighbours(tumor, 1, (7, 7, 1))
     liver = set_difference(orig_liver, ext_tumor)
     perit = set_difference(orig_liver, liver)
-    return liver, perit, tumor
+    return liver.cpu().numpy(), perit.cpu().numpy(), tumor.cpu().numpy()
 
 def load_masks(case_path):
     white = utils.ndarray.load_registered(case_path, phase="v")
@@ -185,9 +186,9 @@ def load_masks(case_path):
     liver, perit, tumor = masks(pred)
     assert white.shape[2] == pred.shape[2], "Segmentation and registered phase v have different height"
     white = white.clip(0, 255) / 255
-    red = 0.6 * liver.cpu().numpy().astype(float)
-    green = 0.6 * tumor.cpu().numpy().astype(float)
-    blue = 0.6 * perit.cpu().numpy().astype(float)
+    red = 0.6 * liver.astype(float)
+    green = 0.6 * tumor.astype(float)
+    blue = 0.6 * perit.astype(float)
     red = (white + red).clip(0, 1)
     green = (white + green).clip(0, 1)
     blue = (white + blue).clip(0, 1)

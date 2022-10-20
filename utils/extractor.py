@@ -102,7 +102,6 @@ def extract(case_path):
     liver, perit, tumor = masks(pred)
 
     params_file = "/content/radiomics/temp_params.yaml"
-    phase = "venosa"
 
     with tempfile.TemporaryDirectory() as tmpdirname:
         tmpdir = Path(tmpdirname)
@@ -115,6 +114,22 @@ def extract(case_path):
             tmpdir / "liver_mask.nii.gz",
         )
 
+        nibabel.save(
+            nibabel.Nifti1Image(
+                perit,
+                affine=affine
+            ),
+            tmpdir / "perit_mask.nii.gz",
+        )
+
+        nibabel.save(
+            nibabel.Nifti1Image(
+                tumor,
+                affine=affine
+            ),
+            tmpdir / "tumor_mask.nii.gz",
+        )
+
         # tumor_mask = (pred == 2).astype(float)
         # nibabel.save(
         #     nibabel.Nifti1Image(
@@ -123,10 +138,15 @@ def extract(case_path):
         #     ),
         #     tmpdir / "tumor_mask.nii.gz",
         # )
-        imageName = case_path / f"registered_phase_{phase[0]}.nii.gz"
-        maskName = tmpdir / "liver_mask.nii.gz"
         extractor = featureextractor.RadiomicsFeatureExtractor(params)
 
-        result = extractor.execute(str(imageName), str(maskName))
-        for key, val in result.items():
-            print("\t%s: %s" % (key, val))
+        for phase in ['b', 'a', 'v', 't']:
+            for mask in ['liver', 'perit', 'tumor']:
+                print(f"Extracting features in phase {phase} for area {mask}.")
+
+                imageName = case_path / f"registered_phase_{phase}.nii.gz"
+                maskName = tmpdir / f"{mask}_mask.nii.gz"
+
+                result = extractor.execute(str(imageName), str(maskName))
+                for key, val in result.items():
+                    print("\t%s: %s" % (key, val))

@@ -1,8 +1,10 @@
 import numpy as np
 import seaborn
 import seaborn_image
+import torch
 from ipywidgets import Dropdown, IntSlider, Output
 from matplotlib import pyplot as plt
+from torch.nn import Parameter
 from torch.nn.functional import l1_loss
 
 import utils.ndarray
@@ -14,6 +16,7 @@ def build_tv(state, inject, project, biject):
         description="What to see:",
         value=None,
         options=[
+            ("Features masks", ("masks",)),
             ("Rgb scan", ("rgb",)),
             ("Segmentation", ("segm",)),
             ("Prediction", ("pred",)),
@@ -59,6 +62,8 @@ def build_tv(state, inject, project, biject):
                 content = load_error(state.case_path, 1)
             elif command == "terr":
                 content = load_error(state.case_path, 2)
+            elif command == "masks":
+                content = load_masks(state.case_path)
             z_slider.max = content.shape[-1] - 1
         except:
             content = None
@@ -135,6 +140,48 @@ def load_segm(case_path, what: str = "segmentation"):
     red = (segm == 1).astype(float)
     green = (segm == 2).astype(float)
     blue = np.zeros_like(segm)
+    red = (white + red).clip(0, 1)
+    green = (white + green).clip(0, 1)
+    blue = (white + blue).clip(0, 1)
+    return np.stack([red, green, blue])  # shape is [RGB, X, Y, Z]
+
+# Masks
+
+def with_neighbours(x: torch.Tensor, minimum = 1, kernel_size = (9, 9, 3)):
+    kx, ky, kz = kernel_size
+    assert all(k % 2 == 1 for k in kernel_size)
+    kernel = torch.nn.Conv3d(
+        in_channels=1,
+        out_channels=1,
+        kernel_size=kernel_size,
+        padding=(kx // 2, ky // 2, kz // 2),
+        device=x.device,
+        dtype=torch.float32,
+    )
+    kernel.bias = Parameter(torch.tensor([0.1 - minimum]), requires_grad=False)
+    kernel.weight = Parameter(torch.ones((1, 1, *kernel_size)), requires_grad=False)
+    return torch.clamp(kernel(x.unsqueeze(0).to(dtype=torch.float32)).squeeze(0), 0, 1).to(dtype=x.dtype)
+
+def set_difference(self, other):
+    return torch.clamp((self - other), 0, 1).to(dtype=torch.int16)
+
+def masks(segm: torch.Tensor):
+    orig_liver = (segm == 1).to(dtype=torch.int16)
+    tumor = (segm == 2).to(dtype=torch.int16)
+    ext_tumor = with_neighbours(tumor, 1, (7, 7, 1))
+    liver = set_difference(orig_liver, ext_tumor)
+    perit = set_difference(orig_liver, liver)
+    return liver, perit, tumor
+
+def load_masks(case_path):
+    white = utils.ndarray.load_registered(case_path, phase="v")
+    pred = utils.ndarray.load_segm(case_path, "prediction")
+    liver, perit, tumor = masks(pred)
+    assert white.shape[2] == pred.shape[2], "Segmentation and registered phase v have different height"
+    white = white.clip(0, 255) / 255
+    red = 0.6 * liver.cpu().numpy().astype(float)
+    green = 0.6 * tumor.cpu().numpy().astype(float)
+    blue = 0.6 * perit.cpu().numpy().astype(float)
     red = (white + red).clip(0, 1)
     green = (white + green).clip(0, 1)
     blue = (white + blue).clip(0, 1)

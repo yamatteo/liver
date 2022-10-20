@@ -175,7 +175,7 @@ def masks(segm: np.ndarray):
     segm = torch.tensor(segm, dtype=torch.int16)
     orig_liver = (segm == 1).to(dtype=torch.int16)
     tumor = (segm == 2).to(dtype=torch.int16)
-    ext_tumor = with_neighbours(tumor, 1, (7, 7, 1))
+    ext_tumor = with_neighbours(tumor, 1, (9, 9, 3))
     liver = set_difference(orig_liver, ext_tumor)
     perit = set_difference(orig_liver, liver)
     return liver.cpu().numpy(), perit.cpu().numpy(), tumor.cpu().numpy()

@@ -11,6 +11,7 @@ from torch.nn import Parameter
 from torch.nn.functional import l1_loss
 
 import utils.ndarray
+from utils.extractor import masks
 
 
 def build_tv(state, inject, project, biject):
@@ -153,32 +154,7 @@ def load_segm(case_path, what: str = "segmentation"):
 
 # Masks
 
-def with_neighbours(x: torch.Tensor, minimum = 1, kernel_size = (9, 9, 3)):
-    kx, ky, kz = kernel_size
-    assert all(k % 2 == 1 for k in kernel_size)
-    kernel = torch.nn.Conv3d(
-        in_channels=1,
-        out_channels=1,
-        kernel_size=kernel_size,
-        padding=(kx // 2, ky // 2, kz // 2),
-        device=x.device,
-        dtype=torch.float32,
-    )
-    kernel.bias = Parameter(torch.tensor([0.1 - minimum]), requires_grad=False)
-    kernel.weight = Parameter(torch.ones((1, 1, *kernel_size)), requires_grad=False)
-    return torch.clamp(kernel(x.unsqueeze(0).to(dtype=torch.float32)).squeeze(0), 0, 1).to(dtype=x.dtype)
 
-def set_difference(self, other):
-    return torch.clamp((self - other), 0, 1).to(dtype=torch.int16)
-
-def masks(segm: np.ndarray):
-    segm = torch.tensor(segm, dtype=torch.int16)
-    orig_liver = (segm == 1).to(dtype=torch.int16)
-    tumor = (segm == 2).to(dtype=torch.int16)
-    ext_tumor = with_neighbours(tumor, 3, (11, 11, 3))
-    liver = set_difference(orig_liver, ext_tumor)
-    perit = set_difference(orig_liver, liver)
-    return liver.cpu().numpy(), perit.cpu().numpy(), tumor.cpu().numpy()
 
 def load_masks(case_path):
     white = utils.ndarray.load_registered(case_path, phase="v")

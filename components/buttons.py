@@ -7,6 +7,7 @@ import july_model
 import newmodel as newmodel
 
 from preprocessing import process_dicomdir
+from utils import extractor
 from . import reactions
 from preprocessing import pyelastix
 
@@ -55,6 +56,11 @@ class ButtonGenerator:
     )
     newmodel_evaluate = Button(
         description="Evaluate newmodel",
+        layout=Layout(width='auto')
+    )
+
+    extract_features = Button(
+        description="Extract features",
         layout=Layout(width='auto')
     )
 
@@ -248,3 +254,9 @@ class ButtonGenerator:
             base_path = state.base_path
             with output_console.new_card():
                 newmodel.evaluate_all_folders(base_path)
+
+        @self.extract_features.on_click
+        def callback(event):
+            case_path = state.case_path
+            with output_console.new_card():
+                extractor.extract(case_path)

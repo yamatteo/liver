@@ -32,12 +32,26 @@ def get_new_interface():
             else:
                 print(f"No case in the selected directory: {state.base_path}")
 
+    case_dropdown = Dropdown(description="Select case:")
+
+    @inject(case_dropdown, except_to=[])
+    def options(cases):
+        return cases
+
+    biject("case", case_dropdown, except_to=None)
+
     new_tab(
         tab, "Setup",
         HBox([
             VBox([
                 HTML("<h3>Set these variables</h3>"),
                 drive_folder_input,
+                HTML("<h4>Select case</h3>"),
+                case_dropdown,
+                buttons.convert,
+                buttons.register,
+                buttons.april_one,
+                buttons.extract_features,
             ]),
             VBox([
                 console
@@ -46,14 +60,6 @@ def get_new_interface():
     )
 
     #################################################### Preprocessing ####################################################
-
-    case_dropdown = Dropdown(description="Select case:")
-
-    @inject(case_dropdown, except_to=[])
-    def options(cases):
-        return cases
-
-    biject("case", case_dropdown, except_to=None)
 
     new_tab(
         tab, "Preprocessing",

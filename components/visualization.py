@@ -1,3 +1,6 @@
+import sys
+import traceback
+
 import numpy as np
 import seaborn
 import seaborn_image
@@ -65,7 +68,10 @@ def build_tv(state, inject, project, biject):
             elif command == "masks":
                 content = load_masks(state.case_path)
             z_slider.max = content.shape[-1] - 1
-        except:
+        except Exception as err:
+            # exc_type, exc_value, exc_traceback = sys.exc_info()
+            print("Exception in loading:", err)
+            print(traceback.format_exc())
             content = None
         state.loaded_content = content
 

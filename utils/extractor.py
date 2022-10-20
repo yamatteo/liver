@@ -19,38 +19,45 @@ import utils.ndarray
 
 params = {
     'imageType': {
-        'Original': {}
+        'Original': {},
+        'Wavelet': {},
+        'LoG': {},
+        'Square': {},
+        'SquareRoot': {},
+        'Logarithm': {},
+        'Exponential': {},
+
     },
     'featureClass': {
         'firstorder': [],
         'glcm': [
-            'Autocorrelation',
-            'JointAverage',
-            'ClusterProminence',
-            'ClusterShade',
-            'ClusterTendency',
-            'Contrast',
-            'Correlation',
-            'DifferenceAverage',
-            'DifferenceEntropy',
-            'DifferenceVariance',
-            'JointEnergy',
-            'JointEntropy',
-            'Imc1',
-            'Imc2',
-            'Idm',
-            'Idmn',
-            'Id',
-            'Idn',
-            'InverseVariance',
-            'MaximumProbability',
-            'SumEntropy',
-            'SumSquares'
+            # 'Autocorrelation',
+            # 'JointAverage',
+            # 'ClusterProminence',
+            # 'ClusterShade',
+            # 'ClusterTendency',
+            # 'Contrast',
+            # 'Correlation',
+            # 'DifferenceAverage',
+            # 'DifferenceEntropy',
+            # 'DifferenceVariance',
+            # 'JointEnergy',
+            # 'JointEntropy',
+            # 'Imc1',
+            # 'Imc2',
+            # 'Idm',
+            # 'Idmn',
+            # 'Id',
+            # 'Idn',
+            # 'InverseVariance',
+            # 'MaximumProbability',
+            # 'SumEntropy',
+            # 'SumSquares'
         ],
-        # 'gldm': None,
-        # 'glrlm': None,
-        # 'glszm': None,
-        # 'shape': None,
+        'gldm': [],
+        'glrlm': [],
+        'glszm': [],
+        'shape': [],
     },
     'setting': {
         'binWidth': 25,
@@ -140,13 +147,15 @@ def extract(case_path):
         # )
         extractor = featureextractor.RadiomicsFeatureExtractor(params)
 
-        for phase in ['b', 'a', 'v', 't']:
-            for mask in ['liver', 'perit', 'tumor']:
-                print(f"Extracting features in phase {phase} for area {mask}.")
+        with open(case_path / "features.csv", 'w') as feat:
+            for phase in ['b', 'a', 'v', 't']:
+                for mask in ['liver', 'perit', 'tumor']:
+                    print(f"Extracting features in phase {phase} for area {mask}.")
 
-                imageName = case_path / f"registered_phase_{phase}.nii.gz"
-                maskName = tmpdir / f"{mask}_mask.nii.gz"
+                    imageName = case_path / f"registered_phase_{phase}.nii.gz"
+                    maskName = tmpdir / f"{mask}_mask.nii.gz"
 
-                result = extractor.execute(str(imageName), str(maskName))
-                for key, val in result.items():
-                    print("\t%s: %s" % (key, val))
+                    result = extractor.execute(str(imageName), str(maskName))
+                    for key, val in result.items():
+                        print("\t%s: %s" % (key, val))
+                        feat.write(f"{phase},{mask},{key},{val}\n")

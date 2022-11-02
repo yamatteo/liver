@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --job-name="ltd_train"          # name of job
+#SBATCH --job-name="update_dataset"          # name of job
 #SBATCH -A otc@v100
 
 # Other partitions are usable by activating/uncommenting
@@ -14,7 +14,7 @@
 # Here, reservation of 10 CPUs (for 1 task) and 1 GPU on a single node:
 #SBATCH --nodes=1                    # we request one node
 #SBATCH --ntasks-per-node=1          # with one task per node (= number of GPUs here)
-#SBATCH --gres=gpu:4                 # number of GPUs per node (max 8 with gpu_p2, gpu_p4, gpu_p5)
+#SBATCH --gres=gpu:1                # number of GPUs per node (max 8 with gpu_p2, gpu_p4, gpu_p5)
 
 # The number of CPUs per task must be adapted according to the partition used. Knowing that here
 # only one GPU is reserved (i.e. 1/4 or 1/8 of the GPUs of the node depending on the partition),
@@ -26,7 +26,7 @@
 
 # /!\ Caution, "multithread" in Slurm vocabulary refers to hyperthreading.
 #SBATCH --hint=nomultithread         # hyperthreading is deactivated
-#SBATCH --time=16:00:00              # maximum execution time requested (HH:MM:SS)
+#SBATCH --time=08:00:00              # maximum execution time requested (HH:MM:SS)
 #SBATCH --output=/gpfswork/rech/otc/uiu95bi/runs/%j.out              # name of output file
 #SBATCH --error=/gpfswork/rech/otc/uiu95bi/runs/%j.out               # name of error file (here, in common with the output file)
 
@@ -47,5 +47,4 @@ set -x
 # Code execution
 cd "/gpfswork/rech/otc/uiu95bi/runs"
 source /gpfswork/rech/otc/uiu95bi/venv/bin/activate
-wandb offline
-PYTHONPATH=/gpfswork/rech/otc/uiu95bi/liver srun python "/gpfswork/rech/otc/uiu95bi/liver/train.py"
+PYTHONPATH=/gpfswork/rech/otc/uiu95bi/liver srun python "/gpfswork/rech/otc/uiu95bi/liver/update_dataset.py"

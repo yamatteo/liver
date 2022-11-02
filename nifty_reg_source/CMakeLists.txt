@@ -135,14 +135,14 @@ if(USE_OPENMP)
             message(FATAL_ERROR "Please turn USE_OPENMP OFF")
         endif()
     endif()
-	
+
     execute_process(COMMAND ${CMAKE_C_COMPILER} -dumpversion OUTPUT_VARIABLE GCC_VERSION)
 
     if(GCC_VERSION VERSION_GREATER 4.2 OR GCC_VERSION VERSION_EQUAL 4.2)
         set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fopenmp")
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp")
     endif(GCC_VERSION VERSION_GREATER 4.2 OR GCC_VERSION VERSION_EQUAL 4.2)
-	
+
     if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
         set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /openmp")
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /openmp")

@@ -146,6 +146,7 @@ def get_criterion(
         original: bool = False,
         registered: bool = False,
         segmented: bool = False,
+        predicted: bool = False,
         windowed: bool = False
 ) -> Callable[[Path], bool]:
     """Make a callable to identify folders."""
@@ -164,8 +165,9 @@ def get_criterion(
                 for phase in ["b", "a", "v", "t"]
             )
             is_segmented = not segmented or "segmentation.nii.gz" in files
+            is_predicted = not predicted or "prediction.nii.gz" in files
             is_windowed = not windowed or "zwindow.pt" in files
-            return is_dicom and is_original and is_registered and is_segmented and is_windowed
+            return is_dicom and is_original and is_registered and is_segmented and is_predicted and is_windowed
         else:
             return False
 

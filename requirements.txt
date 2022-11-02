@@ -2,7 +2,7 @@ dicom2nifti==2.3.0
 nibabel==3.2.2
 rich==11.1.0
 
-adabelief-pytorch
+# adabelief-pytorch
 # black
 # ipykernel
 # ipython
@@ -10,16 +10,16 @@ adabelief-pytorch
 # jupyter
 # jupyterlab
 # matplotlib
-numpy
-pandas
-Pillow
-requests
+# numpy
+# pandas
+# Pillow
+# requests
 # scikit-image
 # scikit-learn
-scipy
+# scipy
 # seaborn
 # seaborn-image
 # tensorboard
-textual
+# textual
 # tornado
-tqdm
+# tqdm

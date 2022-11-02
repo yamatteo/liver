@@ -1,0 +1,69 @@
+# Architecture
+shrink:
+  stream:
+    splitcat:
+      - dw_avg_441
+      - sequential:
+          - SCBlock3d:
+              channels: [ 4, 16, 16 ]
+              stride: [ 2, 2, 1 ]
+              actv: elu
+          - SCBlock3d:
+              channels: [ 16, 60, 60 ]
+              stride: [ 2, 2, 1 ]
+              actv: elu
+    cuda: 0
+    use_grad: False
+lrlo_model:
+  pipeline:
+    - stream:
+        sequential:
+          - SCBlock3d:
+              channels: [ 64, 128, 128 ]
+              actv: leaky
+              norm: insta3d
+          - skipcat:
+              sequential:
+                - dw_max_222
+                - SCBlock3d:
+                    channels: [ 128, 256, 256 ]
+                    actv: leaky
+                    norm: insta3d
+                - skipcat:
+                    sequential:
+                      - dw_max_222
+                      - SCBlock3d:
+                          channels: [ 256, 512, 512 ]
+                          actv: leaky
+                          norm: insta3d
+                      - skipcat:
+                          sequential:
+                            - dw_max_222
+                            - SCBlock3d:
+                                channels: [ 512, 1024, 1024 ]
+                                actv: leaky
+                                norm: insta3d
+                            - uw_max_222
+                      - SCBlock3d:
+                          channels: [ 1536, 1024, 512 ]
+                          actv: relu
+                          drop: drop3d
+                      - uw_max_222
+                - SCBlock3d:
+                    channels: [ 768, 512, 256 ]
+                    actv: relu
+                    drop: drop3d
+                - uw_max_222
+        cuda: 1
+    - stream:
+        sequential:
+          - SCBlock3d:
+              channels: [384, 256, 128]
+              actv: relu
+              drop: drop3d
+          - Conv3d:
+              in_channels: 128
+              out_channels: 2
+              kernel_size: [1, 1, 1]
+          - uw_max_441
+        cuda: 0

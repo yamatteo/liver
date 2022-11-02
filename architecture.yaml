@@ -54,36 +54,39 @@ unet_upward_256:
 unet_upward_128:
   Sequential:
     - Split:
-        - module: none
+        - module:
+            Identity:
           inputs: [ 0 ]
         - module:
             Unpool: { pool: max222 }
           inputs: [ 1 ]
-    - Cat: {}
+    - Cat: { dim: 1 }
     - SCBlock3d: { channels: [ 384, 256, 128 ], actv: relu, drop: drop3d }
     - Conv3d: { in_channels: 128, out_channels: 2, kernel_size: [ 1, 1, 1 ] }
 
 cross128:
   Sequential:
     - Split:
-      - module: none
+      - module:
+          Identity:
         inputs: [ 0 ]
       - module:
           Sequential:
-            - Pool: { pool: max441 }
             - Onehot: { classes: 2 }
+            - Pool: { pool: max441 }
         inputs: [ 1 ]
     - CrossEntropy: { weights: [1, 4] }
 
 cross256:
   Sequential:
     - Split:
-      - module: none
+      - module:
+          Identity:
         inputs: [ 0 ]
       - module:
           Sequential:
-            - Pool: { pool: max882 }
             - Onehot: { classes: 2 }
+            - Pool: { pool: max882 }
         inputs: [ 1 ]
     - CrossEntropy: { weights: [1, 4] }
 

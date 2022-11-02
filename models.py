@@ -7,9 +7,11 @@ from pathlib import Path
 
 import torch
 import yaml
+from rich import print
 from torch import Tensor
 from torch import nn
-from rich import print
+from torch.nn import functional
+from torch.nn import *
 
 T = typing.TypeVar('T')
 throuple = types.GenericAlias(tuple, (T,) * 3)
@@ -25,8 +27,10 @@ def build(path: Path, *, load: bool = False, models_path: Path):
 
 
 def build_module(arch, archs: dict, load: bool, models_path: Path):
-    print("Building:", arch)
+    # print("Building:", arch)
     match arch:
+        case str(name) if name in archs:
+            return build_module(archs[name], archs, load, models_path)
         case str() | int() | float():
             return arch
         case list(items):
@@ -41,17 +45,19 @@ def build_module(arch, archs: dict, load: bool, models_path: Path):
             return eval(name)(*build_module(args, archs, load, models_path))
         case [(str(name), dict(kwargs))] if name[0].isupper():
             return eval(name)(**build_module(kwargs, archs, load, models_path))
-        case [('module', name), *targs]:
+        case [('module', str(name)), *targs]:
             return Stream(build_module(archs[name], archs, load, models_path), **dict(targs, models_path=models_path))
+        case [('module', dict(module)), *targs]:
+            return Stream(build_module(module, archs, load, models_path), **dict(targs, models_path=models_path))
         case list(targs):
             return {key: build_module(value, archs, load, models_path) for key, value in targs}
     raise ValueError(f"Unrecognizable architecture {arch}")
 
 
-class Fractured(nn.Module):
-    def __init__(self, *streams):
+class Fractured(Module):
+    def __init__(self, *streams: Stream):
         super().__init__()
-        self.streams = nn.ModuleList(streams)
+        self.streams = ModuleList(streams)
         streams_dict = {}
         for stream in streams:
             if stream.step in streams_dict:
@@ -62,9 +68,8 @@ class Fractured(nn.Module):
             step: {name for stream in stream_list for name in stream.inputs}
             for step, stream_list in streams_dict.items()
         }
-        final_outputs = {name for stream in streams for name in stream.outputs if name[0] != "_"}
         required_outputs = {
-            step: set.union(final_outputs, *[required_inputs[i] for i in range(step + 1, len(required_inputs))])
+            step: set.union(set(), *[required_inputs[i] for i in range(step + 1, len(required_inputs))])
             for step in streams_dict
         }
         self.streams_dict = streams_dict
@@ -84,7 +89,7 @@ class Fractured(nn.Module):
 
     def forward(self, items: dict):
         for stream in self.streams:
-            items.update(stream(items))
+            items.update(stream.fractured_forward(items))
         return items
 
     def forward_all_steps(self, step_items):
@@ -92,9 +97,9 @@ class Fractured(nn.Module):
         for step, [*modules] in self.streams_dict.items():
             items = step_items[step]
             for module in modules:
-                items.update(module(items))
+                items.update(module.fractured_forward(items))
             output_step_items.append(
-                {name: value for name, value in items.items() if name in self.required_outputs[step]})
+                {name: value for name, value in items.items() if name[0] != '_' or name in self.required_outputs[step]})
         return output_step_items
 
 
@@ -104,7 +109,8 @@ class Stream(nn.Module):
         super().__init__()
         self.module = module
         self.module.requires_grad_(use_grad)
-        self.cuda = cuda
+        if not torch.cuda.is_available():
+            cuda = None
         self.device = torch.device("cpu") if cuda is None else torch.device(f"cuda:{cuda}")
         self.inputs = inputs
         self.outputs = outputs
@@ -124,41 +130,77 @@ class Stream(nn.Module):
 
     def to_cpu(self):
         self.device = torch.device("cpu")
-        self.module.to(self.device)
+        self.module.to(device=self.device)
 
     def to_cuda(self):
         self.device = torch.device(f"cuda:{self.cuda}")
-        self.module.to(self.device)
+        self.module.to(device=self.device)
 
-    def forward(self, inputs: list | dict):
-        if inputs is None:
-            return None
-
+    def forward(self, *inputs: Tensor):
         if self.inputs is not None:
             inputs = [inputs[i] for i in self.inputs]
 
         inputs = [to(x, self.device) for x in inputs]
         outputs = self.module(*inputs)
+        if isinstance(outputs, torch.Tensor):
+            outputs = (outputs, )
+        return outputs
 
-        if self.outputs is not None:
-            outputs = {name: outputs[i] for i, name in enumerate(self.outputs)}
+    def fractured_forward(self, inputs: dict):
+        inputs = [inputs[i] for i in self.inputs]
+
+        inputs = [to(x, self.device) for x in inputs]
+        outputs = self.module(*inputs)
+        if isinstance(outputs, torch.Tensor):
+            outputs = (outputs, )
+
+        outputs = {name: outputs[i] for i, name in enumerate(self.outputs)}
         return outputs
 
 
 # Structures
 class Cascade(nn.Module):
     def __init__(self, *modules):
-        self.modules = nn.ModuleList(modules)
+        super().__init__()
+        self.streams = ModuleList(modules)
 
     def forward(self, x):
         outputs = []
-        for module in self.modules:
+        for module in self.streams:
             x = module(x)
             outputs.append(x)
         return outputs
 
 
-Sequential = nn.Sequential
+class Cat(nn.Module):
+    def __init__(self, *, dim: int = 1):
+        super().__init__()
+        self.dim = dim
+
+    def forward(self, *inputs):
+        return torch.cat(inputs, dim=self.dim)
+
+
+class Onehot(nn.Module):
+    def __init__(self, *, classes: int = 2):
+        super().__init__()
+        self.classes = classes
+
+    def forward(self, x):
+        # Assume x is batch
+        return functional.one_hot(x).permute(0, x.ndim, *range(1, x.ndim)).float()
+
+
+class CrossEntropy(nn.Module):
+    def __init__(self, *, weights: list[int | float] = None):
+        super().__init__()
+        if weights:
+            weights = torch.tensor(weights)
+        self.raw = nn.CrossEntropyLoss(weights, reduction="none")
+
+    def forward(self, input, target):
+        loss = self.raw(input, target)
+        return torch.mean(loss, dim=list(range(1, loss.ndim)))
 
 
 class SkipCat(nn.Module):
@@ -170,13 +212,44 @@ class SkipCat(nn.Module):
         return torch.cat([x, self.submodule(x)], dim=1)
 
 
+class Split(nn.Module):
+    def __init__(self, *modules: Stream):
+        super().__init__()
+        self.streams = nn.ModuleList(modules)
+
+    def forward(self, *inputs):
+        outputs = []
+        for stream in self.streams:
+            out = stream(*inputs)
+            if isinstance(out, Tensor):
+                outputs.append(out)
+            else:
+                outputs.extend(out)
+        return outputs
+
+
+class Sequential(nn.Module):
+    def __init__(self, *modules: Module):
+        super().__init__()
+        self.streams = nn.ModuleList(modules)
+
+    def forward(self, *inputs):
+        for stream in self.streams:
+            if isinstance(inputs, torch.Tensor):
+                inputs = stream(inputs)
+            else:
+                inputs = stream(*inputs)
+        return inputs
+
+
 class SplitCat(nn.Module):
     def __init__(self, sub1: nn.Module, sub2: nn.Module):
         super().__init__()
         self.sub1 = sub1
         self.sub2 = sub2
 
-    def forward(self, x):
+    def forward(self, x: Tensor):
+        assert isinstance(x, Tensor)
         return torch.cat([self.sub1(x), self.sub2(x)], dim=1)
 
 
@@ -313,6 +386,10 @@ def pool_layer(pool: str) -> nn.Module | None:
         return nn.MaxPool3d(kernel_size=(2, 2, 2))
     if pool == "max221":
         return nn.MaxPool3d(kernel_size=(2, 2, 1))
+    if pool == "max441":
+        return nn.MaxPool3d(kernel_size=(4, 4, 1))
+    if pool == "max882":
+        return nn.MaxPool3d(kernel_size=(8, 8, 2))
     if pool == "avg222":
         return nn.AvgPool3d(kernel_size=(2, 2, 2))
     if pool == "avg441":
@@ -541,6 +618,6 @@ def unpool_layer(pool: str) -> nn.Module | None:
 
 
 def set_momentum(model, momentum: float):
-    for module in model.modules():
+    for module in model.streams():
         if isinstance(module, (nn.BatchNorm2d, nn.InstanceNorm2d, nn.BatchNorm3d, nn.InstanceNorm3d)):
             module.momentum = momentum

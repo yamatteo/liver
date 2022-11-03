@@ -11,18 +11,24 @@ Fractured:
   - module: unet_downward
     cuda: 1
     inputs: [ _hid64 ]
+    load: True
     outputs: [ _hid128, _hid256 ]
     step: 1
+    storage: downward.pth
   - module: unet_upward_128
     cuda: 2
     inputs: [ _hid128, _hid256 ]
+    load: True
     outputs: [ pred128 ]
     step: 2
+    storage: upward128.pth
   - module: unet_upward_256
     cuda: 2
     inputs: [ _hid256 ]
+    load: True
     outputs: [ pred256 ]
     step: 2
+    storage: upward256.pth
   - module: cross128
     cuda: 0
     inputs: [ pred128, segm ]

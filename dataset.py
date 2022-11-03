@@ -12,7 +12,11 @@ from rich import print
 
 # import idr_torch as idr
 import nibabelio
+from slicing import slices
 
+
+debug = Path(".env").exists()
+res = 64 if debug else 512
 
 class GeneratorDataset(torch.utils.data.Dataset):
     def __init__(self, generator: Iterator[dict], *, buffer_size: int = None, staging_size: int = None, post_func=None):
@@ -135,10 +139,18 @@ def queue_generator(case_list: list[Path], length=2):
     yield
 
 
-# def train_slice_gen(queue, args):
-#     for bundle_dict in queue:
-#         for slice in nibabelio.Bundle(**bundle_dict).slices(args.slice_height, args.slice_height // 2):
-#             yield dict(
-#                 scan=slice.scan,
-#                 segm=slice.segm,
-#             )
+def train_slice_gen(queue, args):
+    for bundle_dict in queue:
+        for slice in slices(bundle_dict["scan"], bundle_dict["segm"], shape=(res, res, args.slice_height), stride=(res, res, args.slice_height // 2)):
+            yield dict(
+                scan=slice.scan,
+                segm=slice.segm,
+            )
+
+
+def debug_slice_gen(_, height):
+    while True:
+        yield dict(
+            scan=np.random.randn(4, res, res, height),
+            segm=np.random.randint(0, 2, [res, res, height]),
+        )

@@ -75,9 +75,9 @@ class Fractured(Module):
         self.streams_dict = streams_dict
         self.required_outputs = required_outputs
 
-    def save(self):
+    def save(self, epoch=None):
         for stream in self.streams:
-            stream.save()
+            stream.save(epoch=epoch)
 
     def to_cuda(self):
         for stream in self.streams:
@@ -92,15 +92,19 @@ class Fractured(Module):
             items.update(stream.fractured_forward(items))
         return items
 
-    def forward_all_steps(self, step_items):
-        output_step_items = []
-        for step, [*modules] in self.streams_dict.items():
-            items = step_items[step]
-            for module in modules:
-                items.update(module.fractured_forward(items))
-            output_step_items.append(
-                {name: value for name, value in items.items() if name[0] != '_' or name in self.required_outputs[step]})
-        return output_step_items
+    def forward_all_steps(self, step_items: list[dict[str, Tensor]]):
+        for items, (step, streams) in zip(step_items, self.streams_dict.items()):
+            for stream in streams:
+                items.update(stream.fractured_forward(items))
+            items.update({key: None for key in items if key[0] == '_' and key not in self.required_outputs[step]})
+        # output_step_items = []
+        # for step, [*modules] in self.streams_dict.items():
+        #     items = step_items[step]
+        #     for module in modules:
+        #         items.update(module.fractured_forward(items))
+        #     output_step_items.append(
+        #         {name: value for name, value in items.items() if name[0] != '_' or name in self.required_outputs[step]})
+        # return output_step_items
 
 
 class Stream(nn.Module):
@@ -111,6 +115,8 @@ class Stream(nn.Module):
         self.module.requires_grad_(use_grad)
         if not torch.cuda.is_available():
             cuda = None
+        if cuda:
+            self.which_cuda = cuda
         self.device = torch.device("cpu") if cuda is None else torch.device(f"cuda:{cuda}")
         self.inputs = inputs
         self.outputs = outputs
@@ -125,15 +131,19 @@ class Stream(nn.Module):
         if self.use_grad is False:
             self.forward = torch.no_grad()(self.forward)
 
-    def save(self):
-        torch.save(self.state_dict(), self.storage)
+    def save(self, epoch=None):
+        if self.storage:
+            torch.save(self.state_dict(), self.storage)
+            if epoch:
+                torch.save(self.state_dict(), self.storage.with_suffix(f".{epoch:03}.pth"))
+
 
     def to_cpu(self):
         self.device = torch.device("cpu")
         self.module.to(device=self.device)
 
     def to_cuda(self):
-        self.device = torch.device(f"cuda:{self.cuda}")
+        self.device = torch.device(f"cuda:{self.which_cuda}")
         self.module.to(device=self.device)
 
     def forward(self, *inputs: Tensor):
@@ -147,7 +157,11 @@ class Stream(nn.Module):
         return outputs
 
     def fractured_forward(self, inputs: dict):
-        inputs = [inputs[i] for i in self.inputs]
+        try:
+            inputs = [inputs[i] for i in self.inputs]
+        except KeyError as err:
+            print(err)
+            return inputs
 
         inputs = [to(x, self.device) for x in inputs]
         outputs = self.module(*inputs)
@@ -188,7 +202,7 @@ class Onehot(nn.Module):
 
     def forward(self, x):
         # Assume x is batch
-        return functional.one_hot(x).permute(0, x.ndim, *range(1, x.ndim)).float()
+        return functional.one_hot(x.long(), num_classes=self.classes).permute(0, x.ndim, *range(1, x.ndim)).float()
 
 
 class CrossEntropy(nn.Module):
@@ -618,6 +632,6 @@ def unpool_layer(pool: str) -> nn.Module | None:
 
 
 def set_momentum(model, momentum: float):
-    for module in model.streams():
+    for module in model.modules():
         if isinstance(module, (nn.BatchNorm2d, nn.InstanceNorm2d, nn.BatchNorm3d, nn.InstanceNorm3d)):
             module.momentum = momentum

@@ -104,7 +104,7 @@ def masks(segm: np.ndarray):
 def extract(case_path):
     affine, _, _, _ = utils.ndarray.load_registration_data(case_path)
     # scan = utils.ndarray.load_registered(case_path, phase="v")
-    pred = utils.ndarray.load_segm(case_path, "prediction")
+    pred = utils.ndarray.load_segm(case_path, "nnunet_prediction")
     # scans = load_registered_case()
     liver, perit, tumor = masks(pred)
 
@@ -147,7 +147,7 @@ def extract(case_path):
         # )
         extractor = featureextractor.RadiomicsFeatureExtractor(params)
 
-        with open(case_path / "features.csv", 'w') as feat:
+        with open(case_path / "nnunet_features.csv", 'w') as feat:
             for phase in ['b', 'a', 'v', 't']:
                 for mask in ['liver', 'perit', 'tumor']:
                     print(f"Extracting features in phase {phase} for area {mask}.")

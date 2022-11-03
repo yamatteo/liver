@@ -115,8 +115,9 @@ class Stream(nn.Module):
         self.module.requires_grad_(use_grad)
         if not torch.cuda.is_available():
             cuda = None
-        if cuda:
-            self.which_cuda = cuda
+        self.which_cuda = cuda
+        self.active_transfer = cuda is not None
+
         self.device = torch.device("cpu") if cuda is None else torch.device(f"cuda:{cuda}")
         self.inputs = inputs
         self.outputs = outputs
@@ -143,14 +144,21 @@ class Stream(nn.Module):
         self.module.to(device=self.device)
 
     def to_cuda(self):
+        print(f"Stream to cuda {self.which_cuda}")
         self.device = torch.device(f"cuda:{self.which_cuda}")
         self.module.to(device=self.device)
+
+    def to_device(self, inputs):
+        if self.active_transfer:
+            return [to(x, self.device) for x in inputs]
+        else:
+            return inputs
 
     def forward(self, *inputs: Tensor):
         if self.inputs is not None:
             inputs = [inputs[i] for i in self.inputs]
 
-        inputs = [to(x, self.device) for x in inputs]
+        inputs = self.to_device(inputs)
         outputs = self.module(*inputs)
         if isinstance(outputs, torch.Tensor):
             outputs = (outputs, )
@@ -160,10 +168,11 @@ class Stream(nn.Module):
         try:
             inputs = [inputs[i] for i in self.inputs]
         except KeyError as err:
-            print(err)
+            # print("Missing key:", err, "If this is the beginning of training, that's normal.")
             return inputs
 
-        inputs = [to(x, self.device) for x in inputs]
+        inputs = self.to_device(inputs)
+        # print("Stream", [f"{name}:{inputs[i].device}" for i, name in enumerate(self.inputs)])
         outputs = self.module(*inputs)
         if isinstance(outputs, torch.Tensor):
             outputs = (outputs, )
@@ -209,7 +218,7 @@ class CrossEntropy(nn.Module):
     def __init__(self, *, weights: list[int | float] = None):
         super().__init__()
         if weights:
-            weights = torch.tensor(weights)
+            weights = torch.tensor(weights)  # , device=torch.device("cuda:0"))
         self.raw = nn.CrossEntropyLoss(weights, reduction="none")
 
     def forward(self, input, target):
@@ -249,6 +258,7 @@ class Sequential(nn.Module):
 
     def forward(self, *inputs):
         for stream in self.streams:
+            # print(f"Sequential({', '.join([f'{input.shape}:{input.device}' for input in inputs])})")
             if isinstance(inputs, torch.Tensor):
                 inputs = stream(inputs)
             else:
@@ -349,10 +359,17 @@ class SCBlock3d(nn.Module):
 
 
 def to(x, device):
-    try:
-        return x.to(device=device)
-    except AttributeError:
-        return x
+    match x:
+        case Tensor():
+            return x.to(device=device)
+        case tuple():
+            return tuple(to(y, device) for y in x)
+        case list():
+            return list(to(y, device) for y in x)
+        case dict():
+            return {key: to(value, device) for key, value in x.items()}
+        case _:
+            return x
 
 
 ## Single layers

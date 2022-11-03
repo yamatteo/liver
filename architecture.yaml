@@ -7,7 +7,6 @@ Fractured:
     outputs: [ _hid64 ]
     step: 0
     storage: shrink.pth
-    use_grad: False
   - module: unet_downward
     cuda: 1
     inputs: [ _hid64 ]

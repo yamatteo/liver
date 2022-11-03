@@ -105,18 +105,21 @@ def load_registration_data(case_path: Path) -> tuple[np.ndarray, int, int, int]:
     return d["affine"], d["bottom"], d["top"], d["height"]
 
 
-def load(case_path: Path, train: bool = False, clip: tuple[int, int] = None) -> dict:
+def load(case_path: Path, scan: bool = True, train: bool = False, clip: tuple[int, int] = None) -> dict:
     print(f"Loading {case_path}...")
     name = str(case_path.name)
     _, bottom, top, _ = load_registration_data(case_path)
-    scan = np.stack([
-        _load_ndarray(case_path / f"registered_phase_{phase}.nii.gz")
-        for phase in ["b", "a", "v", "t"]
-    ])
-    scan = scan[..., bottom:top]
-    if clip:
-        np.clip(scan, *clip, out=scan)
-    scan = scan.astype(np.float32)
+    if scan:
+        scan = np.stack([
+            _load_ndarray(case_path / f"registered_phase_{phase}.nii.gz")
+            for phase in ["b", "a", "v", "t"]
+        ])
+        scan = scan[..., bottom:top]
+        if clip:
+            np.clip(scan, *clip, out=scan)
+        scan = scan.astype(np.float32)
+    else:
+        scan = None
 
     if train:
         segm = _load_ndarray(case_path / f"segmentation.nii.gz")

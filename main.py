@@ -88,7 +88,7 @@ if __name__ == '__main__':
         )
     else:
         valid_dataset = dataset.GeneratorDataset(
-            iter(valid_cases),
+            ({"case_path":case_path} for case_path in valid_cases),
             post_func=functools.partial(nibabelio.load, train=True, clip=(-300, 400))
         )
 

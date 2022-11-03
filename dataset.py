@@ -1,5 +1,6 @@
 import heapq
 import multiprocessing as mp
+import queue
 from collections import namedtuple
 from itertools import cycle
 from pathlib import Path
@@ -38,7 +39,7 @@ class GeneratorDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, i: int):
         if self.post_func is not None:
-            return self.post_func(key=i, **self.buffer[i])
+            return {"keys": i, **self.post_func(**self.buffer[i])}
         return {"keys": i, **self.buffer[i]}
 
     def fill(self, size=None):
@@ -54,6 +55,8 @@ class GeneratorDataset(torch.utils.data.Dataset):
             list(scores.keys()),
             lambda i: scores[i]
         )
+        if 0 not in smallest:
+            smallest.append(0)
         smallest = reversed(sorted(smallest))
         for k in smallest:
             del self.buffer[k]
@@ -80,14 +83,16 @@ def onehot(x, n=None, dtype=np.float32, is_batch=True):
     if is_batch:
         return np.transpose(x, (0, 4, 1, 2, 3))
     else:
-        return np.transpose(x, (3, 0, 2, 1))
+        return np.transpose(x, (3, 0, 1, 2))
 
 
 def deformed(bundle) -> dict:
+    # print({k:v.shape if isinstance(v, np.ndarray) else v for k, v in bundle.items()})
     scan = bundle["scan"]
     is_batch = scan.ndim == 5
     segm = onehot(bundle["segm"], is_batch=is_batch)
     axis = (2, 3, 4) if is_batch else (1, 2, 3)
+    # print("scan", scan.shape, "segm", segm.shape)
     scan, segm = elasticdeform.deform_random_grid(
         [scan, segm],
         sigma=np.broadcast_to(np.array([4, 4, 1]).reshape([3, 1, 1, 1]), [3, 5, 5, 5]),
@@ -117,12 +122,16 @@ def queue_generator(case_list: list[Path], length=2):
     computed = 0
     while stop is None:
         if len(procs) < length:
+            # p = ctx.Process(target=put, args=(q, next(case_list), True))
             p = ctx.Process(target=put, args=(q, next(case_list), computed >= num_cases))
             procs.append(p)
             p.start()
             computed += 1
             continue
-        stop = yield q.get()
+        try:
+            stop = yield q.get(timeout=5)
+        except queue.Empty:
+            pass
         alive = []
         for p in procs:
             try:
@@ -141,10 +150,10 @@ def queue_generator(case_list: list[Path], length=2):
 
 def train_slice_gen(queue, args):
     for bundle_dict in queue:
-        for slice in slices(bundle_dict["scan"], bundle_dict["segm"], shape=(res, res, args.slice_height), stride=(res, res, args.slice_height // 2)):
+        for scan, segm in slices(bundle_dict["scan"], bundle_dict["segm"], shape=(res, res, args.slice_height), stride=(res, res, args.slice_height // 2)):
             yield dict(
-                scan=slice.scan,
-                segm=slice.segm,
+                scan=scan,
+                segm=segm,
             )
 
 

@@ -1,3 +1,7 @@
+import io
+import multiprocessing
+from contextlib import redirect_stdout
+
 import nibabelio
 from pathlib import Path
 
@@ -157,9 +161,18 @@ def extract(case_path):
 if __name__=="__main__":
     import path_explorer as px
 
-    sources = Path("../sources")
-    for case_name in px.iter_registered(sources):
+    def work(case_name):
+        if px.contains(sources/case_name, ["nnunet_features.csv"]):
+            print(case_name, "already extrated.")
+            return
+        print(case_name, "working on.")
         try:
-            extract(sources / case_name)
+            with redirect_stdout(io.StringIO()):
+                extract(sources / case_name)
         except Exception as err:
             print(case_name, err)
+
+    sources = Path("../sources")
+
+    with multiprocessing.Pool(20) as p:
+        p.map(work, list(px.iter_registered(sources)))

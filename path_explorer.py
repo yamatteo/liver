@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 from pathlib import Path
 from typing import Callable, Iterator
 
@@ -7,6 +8,12 @@ from rich import print
 
 
 ### Criteria
+def contains(path: Path, filelist: list) -> bool:
+    """True if path contains all listed files."""
+    if not path.is_dir():
+        return False
+    files = [file_path.name for file_path in path.iterdir()]
+    return all(f in files for f in filelist)
 
 def is_anything(path: Path) -> bool:
     """True if path contains something related to this project."""
@@ -102,6 +109,9 @@ def recurse(base_path: Path, select_dir: Callable = is_anything, **kwargs):
 
 
 ### Iterators
+def iter_containing(path: Path, filelist: list) -> Iterator[Path]:
+    """Iterates over subfolders containing listed files."""
+    yield from discover(path, functools.partial(contains, filelist=filelist))
 
 def iter_dicom(path: Path) -> Iterator[Path]:
     """Iterates over DICOMDIR subfolders."""

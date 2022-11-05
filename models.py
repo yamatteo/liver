@@ -18,119 +18,110 @@ throuple = types.GenericAlias(tuple, (T,) * 3)
 int3d = throuple[int]
 
 
-def build(path: Path, *, load: bool = False, models_path: Path):
+def build(path: Path, *, models_path: Path):
     with open(path, 'r') as f:
         archs = yaml.load(f.read(), yaml.Loader)
 
     main, main_args = next(iter(archs.items()))
-    return build_module({main: main_args}, archs=archs, load=load, models_path=models_path)
+    return build_module({main: main_args}, archs=archs, models_path=models_path)
 
 
-def build_module(arch, archs: dict, load: bool, models_path: Path):
-    # print("Building:", arch)
+def build_module(arch, archs: dict, models_path: Path):
     match arch:
         case str(name) if name in archs:
-            return build_module(archs[name], archs, load, models_path)
+            return build_module(archs[name], archs, models_path)
         case str() | int() | float():
             return arch
         case list(items):
-            return [build_module(item, archs, load, models_path) for item in items]
-    assert isinstance(arch, dict)
+            return [build_module(item, archs, models_path) for item in items]
+    assert isinstance(arch, dict), f"Unrecognizable architecture of type {type(arch)}"
     match list(iter(arch.items())):
         case []:
             return {}
         case [(str(name), None)] if name[0].isupper():
             return eval(name)()
         case [(str(name), list(args))] if name[0].isupper():
-            return eval(name)(*build_module(args, archs, load, models_path))
+            return eval(name)(*build_module(args, archs, models_path))
         case [(str(name), dict(kwargs))] if name[0].isupper():
-            return eval(name)(**build_module(kwargs, archs, load, models_path))
+            return eval(name)(**build_module(kwargs, archs, models_path))
         case [('module', str(name)), *targs]:
-            return Stream(build_module(archs[name], archs, load, models_path), **dict(targs, models_path=models_path))
+            return Stream(build_module(archs[name], archs, models_path), **dict(targs, models_path=models_path))
         case [('module', dict(module)), *targs]:
-            return Stream(build_module(module, archs, load, models_path), **dict(targs, models_path=models_path))
+            return Stream(build_module(module, archs, models_path), **dict(targs, models_path=models_path))
         case list(targs):
-            return {key: build_module(value, archs, load, models_path) for key, value in targs}
+            return {key: build_module(value, archs, models_path) for key, value in targs}
     raise ValueError(f"Unrecognizable architecture {arch}")
 
 
-class Fractured(Module):
-    def __init__(self, *streams: Stream):
+class Pipeline(Module):
+    def __init__(self, *steps: list[Stream]):
         super().__init__()
-        self.streams = ModuleList(streams)
-        streams_dict = {}
-        for stream in streams:
-            if stream.step in streams_dict:
-                streams_dict[stream.step].append(stream)
-            else:
-                streams_dict[stream.step] = [stream]
-        required_inputs = {
-            step: {name for stream in stream_list for name in stream.inputs}
-            for step, stream_list in streams_dict.items()
-        }
-        required_outputs = {
-            step: set.union(set(), *[required_inputs[i] for i in range(step + 1, len(required_inputs))])
-            for step in streams_dict
-        }
-        self.streams_dict = streams_dict
-        self.required_outputs = required_outputs
+        inputs = [{label for stream in streams for label in stream.inputs} for streams in steps]
+        finals = {label for streams in steps for stream in streams for label in stream.outputs if label[0].isupper()}
+        self.preserved_outputs = [
+            set.union(
+                {label for requireds in inputs[i + 1:] for label in requireds},
+                finals
+            )
+            for i, streams in enumerate(steps)
+        ]
+        self.steps: list[list[Stream]] = ModuleList(ModuleList(streams) for streams in steps)
 
     def save(self, epoch=None):
-        for stream in self.streams:
-            stream.save(epoch=epoch)
+        for streams in self.steps:
+            for stream in streams:
+                stream.save(epoch=epoch)
 
     def to_cuda(self):
-        for stream in self.streams:
-            stream.to_cuda()
+        for streams in self.steps:
+            for stream in streams:
+                stream.to_cuda()
 
     def to_cpu(self):
-        for stream in self.streams:
-            stream.to_cpu()
-
-    def forward(self, items: dict):
-        for stream in self.streams:
-            items.update(stream.fractured_forward(items))
-        return items
-
-    def forward_all_steps(self, step_items: list[dict[str, Tensor]]):
-        for items, (step, streams) in zip(step_items, self.streams_dict.items()):
+        for streams in self.steps:
             for stream in streams:
-                items.update(stream.fractured_forward(items))
-            items.update({key: None for key in items if key[0] == '_' and key not in self.required_outputs[step]})
-        # output_step_items = []
-        # for step, [*modules] in self.streams_dict.items():
-        #     items = step_items[step]
-        #     for module in modules:
-        #         items.update(module.fractured_forward(items))
-        #     output_step_items.append(
-        #         {name: value for name, value in items.items() if name[0] != '_' or name in self.required_outputs[step]})
-        # return output_step_items
+                stream.to_cpu()
+
+    def single_forward(self, items: dict):
+        for streams in self.steps:
+            for stream in streams:
+                items.update(stream(items))
+
+    def pipeline_forward(self, step_items: list[dict[str, Tensor | typing.Any]]):
+        # TODO test real parallelism
+        for step, (items, streams) in enumerate(zip(step_items, self.steps)):
+            for stream in streams:
+                items.update(stream(items))
+            items.update({key: None for key in items if key not in self.preserved_outputs[step]})
 
 
 class Stream(nn.Module):
-    def __init__(self, module: nn.Module, *, cuda=None, inputs: None, load=False, outputs=None, step=None, storage=None,
-                 use_grad=True, models_path=None, **kwargs):
+    def __init__(self, module: nn.Module, *, load=False,
+                 storage=None,
+                 models_path=None, **kwargs):
         super().__init__()
         self.module = module
-        self.module.requires_grad_(use_grad)
-        if not torch.cuda.is_available():
-            cuda = None
-        self.which_cuda = cuda
-        self.active_transfer = cuda is not None
 
-        self.device = torch.device("cpu") if cuda is None else torch.device(f"cuda:{cuda}")
-        self.inputs = inputs
-        self.outputs = outputs
-        self.step = step
-        self.storage = models_path / storage if storage else None
-        if load and storage:
-            try:
-                self.load_state_dict(torch.load(self.storage, map_location=self.device))
-            except (FileNotFoundError, RuntimeError):
-                print(traceback.format_exc())
-        self.use_grad = use_grad
-        if self.use_grad is False:
+        if kwargs.get("requires_grad", True) is False:
+            self.module.requires_grad_(False)
             self.forward = torch.no_grad()(self.forward)
+
+        self.to_device = kwargs["to_device"] if torch.cuda.is_available() and "to_device" in kwargs else None
+
+        self.inputs = kwargs.get("inputs", None)
+        self.outputs = kwargs.get("outputs", None)
+
+        if (models_path := kwargs.get("models_path", None)) and (store_file := kwargs.get("store", None)):
+            self.storage = models_path / store_file
+        else:
+            self.storage = None
+
+        if self.storage:
+            try:
+                device = torch.device(self.to_device) if self.to_device else torch.device("cpu")
+                self.load_state_dict(torch.load(self.storage, map_location=device))
+            except (FileNotFoundError, RuntimeError) as err:
+                print(f"Can't load from {self.storage}.", err)
 
     def save(self, epoch=None):
         if self.storage:
@@ -138,70 +129,92 @@ class Stream(nn.Module):
             if epoch:
                 torch.save(self.state_dict(), self.storage.with_suffix(f".{epoch:03}.pth"))
 
-
     def to_cpu(self):
-        self.device = torch.device("cpu")
-        self.module.to(device=self.device)
+        self.module.to(device=torch.device("cpu"))
 
     def to_cuda(self):
-        print(f"Stream to cuda {self.which_cuda}")
-        self.device = torch.device(f"cuda:{self.which_cuda}")
-        self.module.to(device=self.device)
+        self.module.to(device=self.to_device)
 
-    def to_device(self, inputs):
-        if self.active_transfer:
-            return [to(x, self.device) for x in inputs]
-        else:
-            return inputs
+    def move(self, *inputs):
+        inputs = tuple(torch.as_tensor(data) for data in inputs)
+        if self.to_device:
+            inputs = tuple(to(x, self.to_device) for x in inputs)
+        return inputs
 
-    def forward(self, *inputs: Tensor):
-        if self.inputs is not None:
-            inputs = [inputs[i] for i in self.inputs]
+    def forward(self, *args):
+        match args:
+            case (dict(items), ):
+                try:
+                    inputs = tuple(items[i] for i in self.inputs)
+                except KeyError:
+                    return {}
+            case tuple() if all(isinstance(a, Tensor) for a in args):
+                if self.inputs:
+                    inputs = tuple(args[i] for i in self.inputs)
+                else:
+                    inputs = args
+            case _:
+                raise ValueError("Stream accept either a single dict or many tensors as input.")
 
-        inputs = self.to_device(inputs)
+        inputs = self.move(*inputs)
         outputs = self.module(*inputs)
-        if isinstance(outputs, torch.Tensor):
-            outputs = (outputs, )
-        return outputs
-
-    def fractured_forward(self, inputs: dict):
-        try:
-            inputs = [inputs[i] for i in self.inputs]
-        except KeyError as err:
-            # print("Missing key:", err, "If this is the beginning of training, that's normal.")
-            return inputs
-
-        inputs = self.to_device(inputs)
-        # print("Stream", [f"{name}:{inputs[i].device}" for i, name in enumerate(self.inputs)])
-        outputs = self.module(*inputs)
-        if isinstance(outputs, torch.Tensor):
-            outputs = (outputs, )
-
-        outputs = {name: outputs[i] for i, name in enumerate(self.outputs)}
+        outputs = wrap(outputs)
+        if self.outputs:
+            outputs = {name: unwrap(outputs[i]) for i, name in enumerate(self.outputs)}
         return outputs
 
 
 # Structures
-class Cascade(nn.Module):
-    def __init__(self, *modules):
-        super().__init__()
-        self.streams = ModuleList(modules)
-
-    def forward(self, x):
-        outputs = []
-        for module in self.streams:
-            x = module(x)
-            outputs.append(x)
-        return outputs
-
-
 class Cat(nn.Module):
     def __init__(self, *, dim: int = 1):
         super().__init__()
         self.dim = dim
 
+    def forward(self, *inputs: Tensor):
+        return torch.cat(inputs, dim=self.dim),
+
+
+class Sequential(nn.Module):
+    def __init__(self, *modules: Module):
+        super().__init__()
+        self.streams = nn.ModuleList(modules)
+
     def forward(self, *inputs):
-        return torch.cat(inputs, dim=self.dim)
+        for stream in self.streams:
+            # print(f"Sequential({', '.join([f'{input.shape}:{input.device}' for input in inputs])})")
+            inputs = stream(*inputs)
+            if isinstance(inputs, torch.Tensor):
+                inputs = (inputs,)
+        return inputs
+
+
+class Split(nn.Module):
+    def __init__(self, *modules: Stream):
+        super().__init__()
+        self.streams = nn.ModuleList(modules)
+
+    def forward(self, *inputs):
+        outputs = []
+        for stream in self.streams:
+            out = stream(*inputs)
+            if isinstance(out, Tensor):
+                outputs.append(out)
+            else:
+                outputs.extend(out)
+        return outputs
+
+
+class Cascade(nn.Module):
+    def __init__(self, *modules):
+        super().__init__()
+        self.streams = ModuleList(modules)
+
+    def forward(self, x: Tensor):
+        outputs = []
+        for stream in self.streams:
+            x = stream(x)
+            outputs.append(x)
+        return outputs
 
 
 class Onehot(nn.Module):
@@ -209,7 +222,7 @@ class Onehot(nn.Module):
         super().__init__()
         self.classes = classes
 
-    def forward(self, x):
+    def forward(self, x: Tensor):
         # Assume x is batch
         return functional.one_hot(x.long(), num_classes=self.classes).permute(0, x.ndim, *range(1, x.ndim)).float()
 
@@ -231,39 +244,8 @@ class SkipCat(nn.Module):
         super().__init__()
         self.submodule = submodule
 
-    def forward(self, x):
+    def forward(self, x: Tensor):
         return torch.cat([x, self.submodule(x)], dim=1)
-
-
-class Split(nn.Module):
-    def __init__(self, *modules: Stream):
-        super().__init__()
-        self.streams = nn.ModuleList(modules)
-
-    def forward(self, *inputs):
-        outputs = []
-        for stream in self.streams:
-            out = stream(*inputs)
-            if isinstance(out, Tensor):
-                outputs.append(out)
-            else:
-                outputs.extend(out)
-        return outputs
-
-
-class Sequential(nn.Module):
-    def __init__(self, *modules: Module):
-        super().__init__()
-        self.streams = nn.ModuleList(modules)
-
-    def forward(self, *inputs):
-        for stream in self.streams:
-            # print(f"Sequential({', '.join([f'{input.shape}:{input.device}' for input in inputs])})")
-            if isinstance(inputs, torch.Tensor):
-                inputs = stream(inputs)
-            else:
-                inputs = stream(*inputs)
-        return inputs
 
 
 class SplitCat(nn.Module):
@@ -272,9 +254,8 @@ class SplitCat(nn.Module):
         self.sub1 = sub1
         self.sub2 = sub2
 
-    def forward(self, x: Tensor):
-        assert isinstance(x, Tensor)
-        return torch.cat([self.sub1(x), self.sub2(x)], dim=1)
+    def forward(self, x):
+        return torch.cat(unwrap([self.sub1(x), self.sub2(x)]), dim=1)
 
 
 class Pool:
@@ -358,7 +339,9 @@ class SCBlock3d(nn.Module):
         return self.model(x)
 
 
-def to(x, device):
+def to(x: Tensor | tuple | list | dict, device):
+    if isinstance(device, str):
+        device = torch.device(device)
     match x:
         case Tensor():
             return x.to(device=device)
@@ -366,10 +349,25 @@ def to(x, device):
             return tuple(to(y, device) for y in x)
         case list():
             return list(to(y, device) for y in x)
-        case dict():
-            return {key: to(value, device) for key, value in x.items()}
+        case dict(d):
+            return {key: to(value, device) for key, value in d.items()}
         case _:
             return x
+
+def wrap(arg):
+    if isinstance(arg, Tensor):
+        return arg,
+    elif isinstance(arg, (tuple, list)):
+        return arg
+
+def unwrap(arg):
+    match arg:
+        case Tensor():
+            return arg
+        case (t, ) | [t, ]:
+            return t
+        case tuple() | list():
+            return tuple(map(unwrap, arg))
 
 
 ## Single layers

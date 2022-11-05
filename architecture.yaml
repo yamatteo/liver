@@ -1,43 +1,33 @@
 # Architecture
-Fractured:
-  - module: shrink
-    cuda: 0
-    inputs: [ scan ]
-    load: True
-    outputs: [ _hid64 ]
-    step: 0
-    storage: shrink.pth
-  - module: unet_downward
-    cuda: 1
-    inputs: [ _hid64 ]
-    load: True
-    outputs: [ _hid128, _hid256 ]
-    step: 1
-    storage: downward.pth
-  - module: unet_upward_128
-    cuda: 2
-    inputs: [ _hid128, _hid256 ]
-    load: True
-    outputs: [ pred128 ]
-    step: 2
-    storage: upward128.pth
-  - module: unet_upward_256
-    cuda: 2
-    inputs: [ _hid256 ]
-    load: True
-    outputs: [ pred256 ]
-    step: 2
-    storage: upward256.pth
-  - module: cross128
-    cuda: 0
-    inputs: [ pred128, segm ]
-    outputs: [ loss128 ]
-    step: 3
-  - module: cross256
-    cuda: 0
-    inputs: [ pred256, segm ]
-    outputs: [ loss256 ]
-    step: 3
+Pipeline:
+  - - module: shrink
+      to_device: cuda:0
+      inputs: [ scan ]
+      outputs: [ _hid64 ]
+      store: shrink.pth
+  - - module: unet_downward
+      to_device: cuda:1
+      inputs: [ _hid64 ]
+      outputs: [ _hid128, _hid256 ]
+      store: downward.pth
+  - - module: unet_upward_128
+      to_device: cuda:2
+      inputs: [ _hid128, _hid256 ]
+      outputs: [ pred128 ]
+      store: upward128.pth
+    - module: unet_upward_256
+      to_device: cuda:2
+      inputs: [ _hid256 ]
+      outputs: [ pred256 ]
+      store: upward256.pth
+  - - module: cross128
+      to_device: cuda:0
+      inputs: [ pred128, segm ]
+      outputs: [ loss128 ]
+    - module: cross256
+      to_device: cuda:0
+      inputs: [ pred256, segm ]
+      outputs: [ loss256 ]
 
 shrink:
   SplitCat:

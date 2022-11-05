@@ -5,6 +5,7 @@ from adabelief_pytorch import AdaBelief
 from torch import nn
 from torch.nn import functional
 
+import models
 import report
 from report import print
 from slicing import slices
@@ -16,14 +17,14 @@ debug = Path(".env").exists()
 res = 64 if debug else 512
 
 
-def train(model, train_dataset, valid_dataset, args):
+def train(model: models.Pipeline, train_dataset, valid_dataset, args):
     epoch = 0
     next_key = 0
     # last_device = model.streams[-1].device
     # loss_func = nn.CrossEntropyLoss(torch.tensor(args.class_weights[:args.finals])).to(device=last_device)
     round_loss = 0
     round_scores = {}
-    steps = [{} for _ in model.streams_dict]
+    steps = [{} for _ in model.steps]
 
     # optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.sgd_momentum)
     optimizer = AdaBelief(
@@ -36,14 +37,14 @@ def train(model, train_dataset, valid_dataset, args):
         print_change_log=False,
     )
 
-    validation_round(model, valid_dataset, args)
+    # validation_round(model, valid_dataset, args)
     while epoch < args.epochs:
 
         # Time shift
         steps = [train_dataset[next_key], *steps[:-1]]
         steps[0]["scan"] = torch.tensor(steps[0]["scan"]).unsqueeze(0).float()
         steps[0]["segm"] = torch.tensor(steps[0]["segm"]).unsqueeze(0).clamp(0, 1).long()
-        model.forward_all_steps(steps)
+        model.pipeline_forward(steps)
 
         active_key = steps[-1].get("keys", None)
         if active_key is not None:
@@ -104,7 +105,7 @@ def validation_round(model, valid_dataset, args):
                 scan=torch.tensor(scan).unsqueeze(0).float(),
                 segm=torch.zeros((1, res, res, args.slice_height)),
             )
-            model(input)
+            model.single_forward(input)
             pred.append(torch.nn.Upsample(scale_factor=(4, 4, 1), mode='nearest')(torch.argmax(input["pred128"], dim=1, keepdim=True).float()).squeeze(1))
         scan = torch.tensor(bundle["scan"]).unsqueeze(0)
         pred = torch.cat(pred, dim=-1)[..., :scan.size(-1)].cpu()

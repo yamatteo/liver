@@ -83,7 +83,11 @@ def with_neighbours(x: torch.Tensor, minimum=1, kernel_size=(9, 9, 3)):
     )
     kernel.bias = Parameter(torch.tensor([0.1 - minimum]), requires_grad=False)
     kernel.weight = Parameter(torch.ones((1, 1, *kernel_size)), requires_grad=False)
-    return torch.clamp(kernel(x.unsqueeze(0).to(dtype=torch.float32)).squeeze(0), 0, 1).to(dtype=x.dtype)
+    if x.ndim == 3:
+        x = x.unsqueeze(0)
+    if x.ndim == 4:
+        x = x.unsqueeze(0)
+    return torch.clamp(kernel(x.to(dtype=torch.float32)).squeeze(), 0, 1).to(dtype=x.dtype)
 
 
 def set_difference(self, other):

@@ -25,9 +25,8 @@ res = 64 if debug else 512
 
 if __name__ == '__main__':
     args = SimpleNamespace(
-        arch="architecture.yaml" if debug else "/gpfswork/rech/otc/uiu95bi/livertumor/architecture.yaml",
         batch_size=1,
-        buffer_size=3 if debug else 30,
+        buffer_size=3 if debug else 40,
         # class_weights=[1, 5, 10],
         # dry_run=False,
         device=torch.device("cpu") if debug else torch.device("cuda:0"),
@@ -64,10 +63,12 @@ if __name__ == '__main__':
             )
         ),
         Cat(),
-        ConvBlock("conv", [64, 128, 128], actv="leaky", norm="splitbatch"),
+        ConvBlock("conv", [64, 128, 128], actv="leaky"),
         Stream("max", "222"),
-        ConvBlock("conv", [128, 256, 256], actv="leaky", norm="splitbatch"),
+        Stream("insta", 128, momentum=0.9),
+        ConvBlock("conv", [128, 256, 256], actv="leaky"),
         Stream("max", "222"),
+        Stream("insta", 256, momentum=0.9),
         ConvBlock("conv", [256, 64, 16, 2], kernel=(1, 1, 1), actv="relu")
     )
     if debug:
@@ -77,7 +78,7 @@ if __name__ == '__main__':
     # models.set_momentum(model, args.norm_momentum)
 
     print("Using model:", repr(model))
-
+    args.arch = model.repr_dict
     train_cases, valid_cases = px.split_trainables(args.sources_path)
     train_cases = random.sample(train_cases, len(train_cases))
 

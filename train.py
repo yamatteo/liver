@@ -26,6 +26,7 @@ def scan_shrink(scan: np.ndarray):
 
 def segm_shrink(segm: np.ndarray):
     shape = segm.shape
+    segm = np.clip(segm, 0, 1)
     segm = torch.tensor(segm, dtype=torch.int64).view([1, *shape])
     segm = functional.one_hot(segm, num_classes=2).permute([0, 4, 1, 2, 3]).to(dtype=torch.float32)
     segm = functional.avg_pool3d(segm, kernel_size=shrink_shape)

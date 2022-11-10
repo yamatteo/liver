@@ -54,6 +54,7 @@ def train_epoch(model, ds, *, epoch, optimizer, args):
         f"Training epoch {epoch + 1}/{args.epochs}. "
         f"Loss per scan: {mean_loss:.2e}"
     )
+    report.append({f"loss": mean_loss})
 
 @torch.no_grad()
 def validation_round(model, ds, *, args):

@@ -76,7 +76,7 @@ class Stream(AbstractStream):
 
 
 class SplitBatch(nn.BatchNorm3d):
-    def __init__(self, shape=(4, 4, 4), *args, **kwargs):
+    def __init__(self, shape=(8, 8, 8), *args, **kwargs):
         super(SplitBatch, self).__init__(*args, **kwargs)
         self.shape = shape
 

@@ -27,12 +27,12 @@ if __name__ == '__main__':
     args = SimpleNamespace(
         arch="architecture.yaml" if debug else "/gpfswork/rech/otc/uiu95bi/livertumor/architecture.yaml",
         batch_size=1,
-        buffer_size=3 if debug else 40,
+        buffer_size=3 if debug else 30,
         # class_weights=[1, 5, 10],
         # dry_run=False,
         device=torch.device("cpu") if debug else torch.device("cuda:0"),
         epochs=20 if debug else 200,
-        grad_accumulation_steps=8,
+        grad_accumulation_steps=10,
         finals=2,
         id=f"HOGWILD{int(time.time()) // 120:09X}",
         local_rank=0,  # idr.local_rank,
@@ -63,11 +63,10 @@ if __name__ == '__main__':
                 ConvBlock("sconv", [16, 60, 60], stride=(2, 2, 1), actv="elu"),
             )
         ),
-        Select([1, 0]),
         Cat(),
         ConvBlock("conv", [64, 128, 128], actv="leaky", norm="splitbatch"),
         Stream("max", "222"),
-        ConvBlock("conv", [128, 256, 256], actv="leaky", norm="batch"),
+        ConvBlock("conv", [128, 256, 256], actv="leaky", norm="splitbatch"),
         Stream("max", "222"),
         ConvBlock("conv", [256, 64, 16, 2], kernel=(1, 1, 1), actv="relu")
     )

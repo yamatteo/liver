@@ -1,87 +1,41 @@
-# Architecture
-Pipeline:
-  - - module: shrink
-      to_device: cuda:0
-      inputs: [ scan ]
-      outputs: [ _hid64 ]
-      store: shrink.pth
-  - - module: unet_downward
-      to_device: cuda:1
-      inputs: [ _hid64 ]
-      outputs: [ _hid128, _hid256 ]
-      store: downward.pth
-  - - module: unet_upward_128
-      to_device: cuda:2
-      inputs: [ _hid128, _hid256 ]
-      outputs: [ pred128 ]
-      store: upward128.pth
-    - module: unet_upward_256
-      to_device: cuda:2
-      inputs: [ _hid256 ]
-      outputs: [ pred256 ]
-      store: upward256.pth
-  - - module: cross128
-      to_device: cuda:0
-      inputs: [ pred128, segm ]
-      outputs: [ loss128 ]
-    - module: cross256
-      to_device: cuda:0
-      inputs: [ pred256, segm ]
-      outputs: [ loss256 ]
-
-shrink:
-  SplitCat:
-    - Pool: { pool: avg441 }
-    - Sequential:
-        - SCBlock3d: { channels: [ 4, 16, 16 ], stride: [ 2, 2, 1 ], actv: elu }
-        - SCBlock3d: { channels: [ 16, 60, 60 ], stride: [ 2, 2, 1 ], actv: elu }
-
-unet_downward:
-  Cascade:
-    - SCBlock3d: { channels: [ 64, 128, 128 ], actv: leaky, norm: insta3d }
-    - Sequential:
-        - Pool: { pool: max222 }
-        - SCBlock3d: { channels: [ 128, 256, 256 ], actv: leaky, norm: insta3d }
-
-unet_upward_256:
-  Conv3d: { in_channels: 256, out_channels: 2, kernel_size: [ 1, 1, 1 ] }
-
-unet_upward_128:
-  Sequential:
-    - Split:
-        - module:
-            Identity:
-          inputs: [ 0 ]
-        - module:
-            Unpool: { pool: max222 }
-          inputs: [ 1 ]
-    - Cat: { dim: 1 }
-    - SCBlock3d: { channels: [ 384, 256, 128 ], actv: relu, drop: drop3d }
-    - Conv3d: { in_channels: 128, out_channels: 2, kernel_size: [ 1, 1, 1 ] }
-
-cross128:
-  Sequential:
-    - Split:
-      - module:
-          Identity:
-        inputs: [ 0 ]
-      - module:
-          Sequential:
-            - Onehot: { classes: 2 }
-            - Pool: { pool: max441 }
-        inputs: [ 1 ]
-    - CrossEntropy: { weights: [1, 4] }
-
-cross256:
-  Sequential:
-    - Split:
-      - module:
-          Identity:
-        inputs: [ 0 ]
-      - module:
-          Sequential:
-            - Onehot: { classes: 2 }
-            - Pool: { pool: max882 }
-        inputs: [ 1 ]
-    - CrossEntropy: { weights: [1, 4] }
-
+## Architecture
+#Pipeline:
+#  - - module: shrink
+#      to_device: cuda:0
+#      inputs: [ scan ]
+#      outputs: [ pred ]
+#      store: shrink882.pth
+#    - module: cross
+#      to_device: cuda:0
+#      inputs: [ pred, segm ]
+#      outputs: [ loss ]
+#
+#shrink:
+#  Sequential:
+#    - SplitCat:
+#        - Pool: { pool: avg441 }
+#        - Sequential:
+#            - SCBlock3d: { channels: [ 4, 16, 16 ], stride: [ 2, 2, 1 ], actv: elu }
+#            - SCBlock3d: { channels: [ 16, 60, 60 ], stride: [ 2, 2, 1 ], actv: elu }
+#    - SCBlock3d: { channels: [ 64, 128, 128 ], actv: leaky, norm: insta3d }
+#    - Pool: { pool: max222 }
+#    - SCBlock3d: { channels: [ 128, 256, 256 ], actv: leaky, norm: insta3d }
+#    - Conv3d: { in_channels: 256, out_channels: 64, kernel_size: [ 1, 1, 1 ] }
+#    - ReLU:
+#    - Conv3d: { in_channels: 64, out_channels: 16, kernel_size: [ 1, 1, 1 ] }
+#    - ReLU:
+#    - Conv3d: { in_channels: 16, out_channels: 2, kernel_size: [ 1, 1, 1 ] }
+#
+#cross:
+#  Sequential:
+#    - Split:
+#      - module:
+#          Identity:
+#        inputs: [ 0 ]
+#      - module:
+#          Sequential:
+#            - Onehot: { classes: 2 }
+#            - Pool: { pool: max882 }
+#        inputs: [ 1 ]
+#    - CrossEntropy:
+#

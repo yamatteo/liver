@@ -14,7 +14,7 @@
 # Here, reservation of 10 CPUs (for 1 task) and 1 GPU on a single node:
 #SBATCH --nodes=1                    # we request one node
 #SBATCH --ntasks-per-node=1          # with one task per node (= number of GPUs here)
-#SBATCH --gres=gpu:3                 # number of GPUs per node (max 8 with gpu_p2, gpu_p4, gpu_p5)
+#SBATCH --gres=gpu:1                 # number of GPUs per node (max 8 with gpu_p2, gpu_p4, gpu_p5)
 
 # The number of CPUs per task must be adapted according to the partition used. Knowing that here
 # only one GPU is reserved (i.e. 1/4 or 1/8 of the GPUs of the node depending on the partition),

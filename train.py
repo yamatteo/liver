@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import numpy as np
 import torch
 from adabelief_pytorch import AdaBelief
 from torch import nn
@@ -7,119 +8,82 @@ from torch.nn import functional
 
 import models
 import report
-from report import print
+from rich import print
 from slicing import slices
 
 cuda0 = torch.device("cuda:0")
-cuda1 = torch.device("cuda:1")
+# cuda1 = torch.device("cuda:1")
 
 debug = Path(".env").exists()
 res = 64 if debug else 512
+shrink_shape = (16, 16, 4)
 
+def scan_shrink(scan: np.ndarray):
+    shape = scan.shape
+    scan = torch.tensor(scan, dtype=torch.float32).view([1, *shape])
+    scan = functional.avg_pool3d(scan, kernel_size=shrink_shape)
+    return scan.numpy()
 
-def train(model: models.Pipeline, train_dataset, valid_dataset, args):
-    epoch = 0
-    next_key = 0
-    # last_device = model.streams[-1].device
-    # loss_func = nn.CrossEntropyLoss(torch.tensor(args.class_weights[:args.finals])).to(device=last_device)
-    round_loss = 0
-    round_scores = {}
-    steps = [{} for _ in model.steps]
+def segm_shrink(segm: np.ndarray):
+    shape = segm.shape
+    segm = torch.tensor(segm, dtype=torch.int64).view([1, *shape])
+    segm = functional.one_hot(segm, num_classes=2).permute([0, 4, 1, 2, 3]).to(dtype=torch.float32)
+    segm = functional.avg_pool3d(segm, kernel_size=shrink_shape)
+    # segm = torch.argmax(segm, dim=1)
+    return segm.numpy()
 
-    # optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.sgd_momentum)
-    optimizer = AdaBelief(
-        model.parameters(),
-        lr=args.lr,
-        eps=1e-8,
-        betas=(0.9, 0.999),
-        weight_decouple=False,
-        rectify=False,
-        print_change_log=False,
+def train_epoch(model, ds, *, epoch, optimizer, args):
+    """Assuming model is single stream."""
+    round_scores = dict()
+
+    for data in ds:
+        key = data["keys"]
+        scan = data["scan"]
+        segm = data["segm"]
+        pred, = model(torch.tensor(scan, dtype=torch.float32, device=args.device).reshape([1, *scan.shape]))
+        loss = torch.nn.functional.cross_entropy(pred, torch.tensor(segm_shrink(segm), device=args.device))
+        loss.backward()
+        round_scores.update({key: loss.item()})
+        if (key + 1) % args.grad_accumulation_steps == 0 or key + 1 == len(ds):
+            optimizer.step()
+            optimizer.zero_grad()
+    ds.drop(round_scores)
+    mean_loss = sum(round_scores.values()) * args.grad_accumulation_steps / len(ds)
+    print(
+        f"Training epoch {epoch + 1}/{args.epochs}. "
+        f"Loss per scan: {mean_loss:.2e}"
     )
 
-    # validation_round(model, valid_dataset, args)
-    while epoch < args.epochs:
-
-        # Time shift
-        steps = [train_dataset[next_key], *steps[:-1]]
-        steps[0]["scan"] = torch.tensor(steps[0]["scan"]).unsqueeze(0).float()
-        steps[0]["segm"] = torch.tensor(steps[0]["segm"]).unsqueeze(0).clamp(0, 1).long()
-        model.pipeline_forward(steps)
-
-        active_key = steps[-1].get("keys", None)
-        if active_key is not None:
-            loss = torch.mean(steps[-1]["loss128"] + steps[-1]["loss256"]) / args.grad_accumulation_steps
-            loss.backward()
-            round_loss += loss.item()
-            round_scores.update({steps[-1]["keys"]: loss.item()})
-            if (active_key + 1) % args.grad_accumulation_steps == 0\
-                    or active_key + 1 == len(train_dataset):
-                optimizer.step()
-                optimizer.zero_grad()
-
-        # keys = [k, *keys[:-1]]
-        # inputs[0] = [data["scan"].unsqueeze(0), *inputs[0][:-1]]
-        # for j in range(1, len(streams) + 1):
-        #     inputs[j] = [None, *inputs[j][:-1]]
-        # if args.finals == 2:
-        #     targets = [data["segm"].unsqueeze(0).clamp(0, 1), *targets[:-1]]
-        # else:
-        #     targets = [data["segm"].unsqueeze(0), *targets[:-1]]
-
-        next_key += 1
-        if next_key >= len(train_dataset):
-            next_key = 0
-            if round_scores:
-                train_dataset.drop(round_scores)
-        if active_key == len(train_dataset) - 1:
-            mean_loss = (
-                    sum(round_scores.values())
-                    * args.grad_accumulation_steps
-                    / len(train_dataset)
-            )
-            print(
-                f"Training epoch {epoch+1}/{args.epochs}. "
-                f"Loss per scan: {mean_loss:.2e}"
-            )
-            if (epoch + 1) % 20 == 0:
-                next_key = 0
-                steps = [{} for _ in model.streams_dict]
-                validation_round(model, valid_dataset, args)
-                model.save(epoch=epoch)
-            report.append({f"loss": mean_loss})
-
-            epoch += 1
-            round_loss = 0
-            round_scores = {}
-
-
 @torch.no_grad()
-def validation_round(model, valid_dataset, args):
+def validation_round(model, ds, *, args):
     # first_device, last_device = streams[0].device, streams[-1].device
     scores = []
     samples = []
-    for bundle in valid_dataset:
+    for data in ds:
+        name = data.get("name", "no name")
+        scan = data["scan"]
+        segm = data["segm"]
         pred = []
-        for (scan, ) in slices(bundle["scan"], shape=(res, res, args.slice_height), pad_up_to=1):
-            input = dict(
-                scan=torch.tensor(scan).unsqueeze(0).float(),
-                segm=torch.zeros((1, res, res, args.slice_height)),
-            )
-            model.single_forward(input)
-            pred.append(torch.nn.Upsample(scale_factor=(4, 4, 1), mode='nearest')(torch.argmax(input["pred128"], dim=1, keepdim=True).float()).squeeze(1))
-        scan = torch.tensor(bundle["scan"]).unsqueeze(0)
-        pred = torch.cat(pred, dim=-1)[..., :scan.size(-1)].cpu()
-        segm = torch.tensor(bundle["segm"]).unsqueeze(0).clamp(0, 1)
-        intersection = torch.sum(pred * segm).item() + 1
-        union = torch.sum((pred + segm).clamp(0, 1)).item() + 1
-        scores.append({"name": bundle.get("name", "no name"), "value": intersection/union})
+        target = []
+        for (x, t) in slices(scan, segm, shape=args.slice_shape, pad_up_to=1):
+            y, = model(torch.tensor(x, dtype=torch.float32, device=args.device).reshape([1, *x.shape]))
+            pred.append(y)
+            target.append(segm_shrink(t))
+        scan = scan_shrink(scan)
+        target = np.concatenate(target, axis=-1)[..., :scan.shape[-1]]
+        pred = torch.cat(pred, dim=-1)[..., :scan.shape[-1]].cpu().numpy()
+        target = np.argmax(target, axis=1)
+        pred = np.argmax(pred, axis=1)
+        intersection = np.sum(pred * target) + 1
+        union = np.sum(np.clip(pred + target, 0, 1)) + 1
+        scores.append({"name": name, "value": intersection/union})
         for _ in range(4):
             samples.append(report.sample(
-                scan.detach().cpu().numpy(),
+                scan,
                 # scans[1].detach().cpu().numpy(),
-                pred.detach().cpu().numpy(),
+                pred,
                 # torch.argmax(preds[1], dim=1).detach().cpu().numpy(),
-                segm.detach().cpu().numpy()
+                target
             ))
     print("Validation scores are:")
     for score in scores:
@@ -128,6 +92,134 @@ def validation_round(model, valid_dataset, args):
         print(f"{name:>12}:{100 * value:6.1f}% iou")
     mean_score = sum(item["value"] for item in scores) / len(scores)
     report.append({f"validation_score": mean_score, "samples":samples}, commit=False)
+
+def train(model, tds, vds, *, args):
+    optimizer = AdaBelief(
+            model.parameters(),
+            lr=args.lr,
+            eps=1e-8,
+            betas=(0.9, 0.999),
+            weight_decouple=False,
+            rectify=False,
+            print_change_log=False,
+        )
+    for epoch in range(args.epochs):
+        if (epoch+1) % 20 == 0:
+            validation_round(model, vds, args=args)
+            torch.save(model.state_dict(), args.models_path / "last.pth")
+        else:
+            train_epoch(model, tds, epoch=epoch, optimizer=optimizer, args=args)
+# def train(model: models.Pipeline, train_dataset, valid_dataset, args):
+#     epoch = 0
+#     next_key = 0
+#     # last_device = model.streams[-1].device
+#     # loss_func = nn.CrossEntropyLoss(torch.tensor(args.class_weights[:args.finals])).to(device=last_device)
+#     round_loss = 0
+#     round_scores = {}
+#     steps = [{} for _ in model.steps]
+#
+#     # optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.sgd_momentum)
+#     optimizer = AdaBelief(
+#         model.parameters(),
+#         lr=args.lr,
+#         eps=1e-8,
+#         betas=(0.9, 0.999),
+#         weight_decouple=False,
+#         rectify=False,
+#         print_change_log=False,
+#     )
+#
+#     # validation_round(model, valid_dataset, args)
+#     while epoch < args.epochs:
+#
+#         # Time shift
+#         steps = [train_dataset[next_key], *steps[:-1]]
+#         steps[0]["scan"] = torch.tensor(steps[0]["scan"]).unsqueeze(0).float()
+#         steps[0]["segm"] = torch.tensor(steps[0]["segm"]).unsqueeze(0).clamp(0, 1).long()
+#         model.pipeline_forward(steps)
+#
+#         active_key = steps[-1].get("keys", None)
+#         if active_key is not None:
+#             loss = torch.mean(steps[-1]["loss128"] + steps[-1]["loss256"]) / args.grad_accumulation_steps
+#             loss.backward()
+#             round_loss += loss.item()
+#             round_scores.update({steps[-1]["keys"]: loss.item()})
+#             if (active_key + 1) % args.grad_accumulation_steps == 0\
+#                     or active_key + 1 == len(train_dataset):
+#                 optimizer.step()
+#                 optimizer.zero_grad()
+#
+#         # keys = [k, *keys[:-1]]
+#         # inputs[0] = [data["scan"].unsqueeze(0), *inputs[0][:-1]]
+#         # for j in range(1, len(streams) + 1):
+#         #     inputs[j] = [None, *inputs[j][:-1]]
+#         # if args.finals == 2:
+#         #     targets = [data["segm"].unsqueeze(0).clamp(0, 1), *targets[:-1]]
+#         # else:
+#         #     targets = [data["segm"].unsqueeze(0), *targets[:-1]]
+#
+#         next_key += 1
+#         if next_key >= len(train_dataset):
+#             next_key = 0
+#             if round_scores:
+#                 train_dataset.drop(round_scores)
+#         if active_key == len(train_dataset) - 1:
+#             mean_loss = (
+#                     sum(round_scores.values())
+#                     * args.grad_accumulation_steps
+#                     / len(train_dataset)
+#             )
+#             print(
+#                 f"Training epoch {epoch+1}/{args.epochs}. "
+#                 f"Loss per scan: {mean_loss:.2e}"
+#             )
+#             if (epoch + 1) % 20 == 0:
+#                 next_key = 0
+#                 steps = [{} for _ in model.streams_dict]
+#                 validation_round(model, valid_dataset, args)
+#                 model.save(epoch=epoch)
+#             report.append({f"loss": mean_loss})
+#
+#             epoch += 1
+#             round_loss = 0
+#             round_scores = {}
+#
+#
+# @torch.no_grad()
+# def validation_round(model, valid_dataset, args):
+#     # first_device, last_device = streams[0].device, streams[-1].device
+#     scores = []
+#     samples = []
+#     for bundle in valid_dataset:
+#         pred = []
+#         for (scan, ) in slices(bundle["scan"], shape=(res, res, args.slice_height), pad_up_to=1):
+#             input = dict(
+#                 scan=torch.tensor(scan).unsqueeze(0).float(),
+#                 segm=torch.zeros((1, res, res, args.slice_height)),
+#             )
+#             model.single_forward(input)
+#             pred.append(torch.nn.Upsample(scale_factor=(4, 4, 1), mode='nearest')(torch.argmax(input["pred128"], dim=1, keepdim=True).float()).squeeze(1))
+#         scan = torch.tensor(bundle["scan"]).unsqueeze(0)
+#         pred = torch.cat(pred, dim=-1)[..., :scan.size(-1)].cpu()
+#         segm = torch.tensor(bundle["segm"]).unsqueeze(0).clamp(0, 1)
+#         intersection = torch.sum(pred * segm).item() + 1
+#         union = torch.sum((pred + segm).clamp(0, 1)).item() + 1
+#         scores.append({"name": bundle.get("name", "no name"), "value": intersection/union})
+#         for _ in range(4):
+#             samples.append(report.sample(
+#                 scan.detach().cpu().numpy(),
+#                 # scans[1].detach().cpu().numpy(),
+#                 pred.detach().cpu().numpy(),
+#                 # torch.argmax(preds[1], dim=1).detach().cpu().numpy(),
+#                 segm.detach().cpu().numpy()
+#             ))
+#     print("Validation scores are:")
+#     for score in scores:
+#         name = score["name"]
+#         value = score["value"]
+#         print(f"{name:>12}:{100 * value:6.1f}% iou")
+#     mean_score = sum(item["value"] for item in scores) / len(scores)
+#     report.append({f"validation_score": mean_score, "samples":samples}, commit=False)
 
 
 # def to(t, device):

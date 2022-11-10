@@ -17,7 +17,6 @@ from slicing import slices
 
 
 debug = Path(".env").exists()
-res = 64 if debug else 512
 
 class GeneratorDataset(torch.utils.data.Dataset):
     def __init__(self, generator: Iterator[dict], *, buffer_size: int = None, staging_size: int = None, post_func=None):
@@ -149,17 +148,19 @@ def queue_generator(case_list: list[Path], length=2):
 
 
 def train_slice_gen(queue, args):
+    shape = args.slice_shape
+    stride = (shape[0], shape[1], shape[2]//2)
     for bundle_dict in queue:
-        for scan, segm in slices(bundle_dict["scan"], bundle_dict["segm"], shape=(res, res, args.slice_height), stride=(res, res, args.slice_height // 2)):
+        for scan, segm in slices(bundle_dict["scan"], bundle_dict["segm"], shape=args.slice_shape, stride=stride):
             yield dict(
                 scan=scan,
                 segm=segm,
             )
 
 
-def debug_slice_gen(_, height):
+def debug_slice_gen(_, shape):
     while True:
         yield dict(
-            scan=np.random.randn(4, res, res, height),
-            segm=np.random.randint(0, 2, [res, res, height]),
+            scan=np.random.randn(4, *shape),
+            segm=np.random.randint(0, 2, shape),
         )

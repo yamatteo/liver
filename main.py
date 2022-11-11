@@ -78,9 +78,15 @@ if __name__ == '__main__':
         storage=args.models_path/"last.pth",
     )
     losses = Wrapper(
-        Split(
-            Stream("CrossEntropyLoss"),
-            Stream("Recall", argmax_input_dim=1),
+        Sequential(
+            Separated(
+                Stream("Identity"),
+                Stream("Clamp", 0, 1),
+            ),
+            Split(
+                Stream("CrossEntropyLoss"),
+                Stream("Recall", argmax_input_dim=1),
+            ),
         ),
         inputs=["pred", "segm"],
         outputs=["cross", "recall"],

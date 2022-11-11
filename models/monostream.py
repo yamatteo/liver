@@ -31,23 +31,22 @@ def build(name, *args, **kwargs):
             return lambda x: torch.argmax(x, dim=kwargs.get("dim", None))
         case "as_tensor":
             batch_dims = kwargs.get("batch_dims", None)
-            device = kwargs.get("device", "cpu") if torch.cuda.is_available() else "cpu"
+            device = kwargs.get("device", None) if torch.cuda.is_available() else "cpu"
             dtype = kwargs.get("dtype", None)
+            kwargs = {}
+            if device:
+                kwargs["device"] = device
+            if dtype:
+                kwargs["dtype"] = dtype
 
             def mod(x):
-                match (batch_dims, dtype):
-                    case (None, None) | (int(), None) if batch_dims==x.ndim:
-                        return torch.as_tensor(x, device=device)
-                    case (None, t):
-                        return torch.as_tensor(x, device=device, dtype=t)
-                    case (int(), None) if batch_dims == x.ndim + 1:
-                        return torch.as_tensor(x, device=device).unsqueeze(0)
-                    case (int(), t) if batch_dims == x.ndim + 1:
-                        return torch.as_tensor(x, device=device, dtype=t).unsqueeze(0)
-                    case _:
-                        raise ValueError(f"{batch_dims=:}, {device=:}, {dtype=:}")
+                if batch_dims is None or batch_dims==x.ndim:
+                    return torch.as_tensor(x, **kwargs)
+                return torch.as_tensor(x, **kwargs).unsqueeze(0)
 
             return mod
+        case "Clamp":
+            return lambda x: torch.clamp(x, *args)
         case "Recall":
             argmax_input_dim = kwargs.get("argmax_input_dim", None)
             def recall(input, target):

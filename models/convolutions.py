@@ -156,3 +156,4 @@ class ConvBlock(Stream):
 
     def forward(self, *args: Tensor) -> tuple[Tensor, ...]:
         return wrap(self.mod(*args))
+

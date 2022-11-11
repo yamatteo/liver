@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import torch
 import yaml
 from adabelief_pytorch import AdaBelief
+from torch import nn
 
 # from torchvision import datasets, transforms
 import dataset
@@ -17,6 +18,7 @@ import nibabelio
 import path_explorer as px
 import report
 from rich import print
+
 from train import train_epoch, validation_round, train
 from models import *
 
@@ -54,31 +56,42 @@ if __name__ == '__main__':
     # dist.init_process_group(backend='nccl', init_method='env://', world_size=idr.size, rank=idr.rank)
 
     print("Try building model...")
-    model = Sequential(
-        Split(
-            Stream('avg', '441'),
-            Sequential(
-                ConvBlock("sconv", [4, 16, 16], stride=(2, 2, 1), actv="elu"),
-                ConvBlock("sconv", [16, 60, 60], stride=(2, 2, 1), actv="elu"),
-            )
+    model = Wrapper(
+        Sequential(
+            Stream("as_tensor", dtype=torch.float32),
+            ConvBlock("conv", [4, 16, 16], actv="ELU", norm="InstanceNorm3d"),
+            SkipCat(
+                Sequential(
+                    Stream("MaxPool3d", kernel_size=(2, 2, 2)),
+                    ConvBlock("conv", [16, 32, 32], actv="ELU", norm="InstanceNorm3d"),
+                    ConvBlock("conv", [32, 16, 16], actv="ELU", norm="InstanceNorm3d", drop="Dropout3d"),
+                    Stream("Upsample", scale_factor=(2, 2, 2), mode='nearest')
+                ),
+                dim=1,
+            ),
+            ConvBlock("conv", [32, 16, 16], actv="ELU", norm="InstanceNorm3d", drop="Dropout3d"),
+            ConvBlock("pconv", [16, 8, 4, 2], actv="ReLU"),
         ),
-        Cat(),
-        ConvBlock("conv", [64, 128, 128], actv="leaky"),
-        Stream("max", "222"),
-        Stream("insta", 128, momentum=0.9),
-        ConvBlock("conv", [128, 256, 256], actv="leaky"),
-        Stream("max", "222"),
-        Stream("insta", 256, momentum=0.9),
-        ConvBlock("conv", [256, 64, 16, 2], kernel=(1, 1, 1), actv="relu")
+        inputs=["scan"],
+        outputs=["pred"],
+        rank=0,
+        storage=args.models_path/"last.pth",
     )
-    if debug:
-        model.cpu()
-    else:
-        model.cuda(0)
+    losses = Wrapper(
+        Split(
+            Stream("CrossEntropyLoss"),
+            Stream("Recall", argmax_input_dim=1),
+        ),
+        inputs=["pred", "segm"],
+        outputs=["cross", "recall"],
+        rank=0,
+    )
+    model.to_device()
+    losses.to_device()
     # models.set_momentum(model, args.norm_momentum)
 
     print("Using model:", repr(model))
-    args.arch = model.repr_dict
+    args.arch = model.stream.repr_dict
     train_cases, valid_cases = px.split_trainables(args.sources_path)
     train_cases = random.sample(train_cases, len(train_cases))
 
@@ -135,7 +148,7 @@ if __name__ == '__main__':
             rectify=False,
             print_change_log=False,
         )
-        train(model, train_dataset, valid_dataset, args=args)
+        train(model, losses, tds=train_dataset, vds=valid_dataset, args=args)
         # train(ddp_model, train_dataset, train_loader, gpu, args)
         # train(model=model, train_dataset=train_dataset, valid_dataset=valid_dataset, args=args)
     except:

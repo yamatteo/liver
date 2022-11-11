@@ -1,18 +1,6 @@
-from types import GeneratorType
-
+import torch
 from torch import nn, Tensor
-
-
-def wrap(*args) -> tuple | tuple[Tensor, ...]:
-    match args:
-        case ():
-            return ()
-        case (tuple() | list() | GeneratorType() as items, *rest):
-            return *wrap(*items), *wrap(*rest)
-        case (item, ):
-            return item,
-        case (item, *rest):
-            return item, *wrap(*rest)
+from . import wrap
 
 
 class AbstractStream(nn.Module):
@@ -36,6 +24,23 @@ class Stream(AbstractStream):
     def __init__(self, name, *args, **kwargs):
         super(Stream, self).__init__("Stream", name, *args, **kwargs)
         match name.lower():
+            case "argmax":
+                self.mod = lambda x: torch.argmax(x, dim=kwargs.get("dim", None))
+            case "as_tensor":
+                batch_dims = kwargs.get("batch_dims", None)
+                device = kwargs.get("device", "cpu") if torch.cuda.is_available() else "cpu"
+
+                def mod(x):
+                    x = torch.as_tensor(x, device=device)
+                    if batch_dims is None or batch_dims == x.ndim:
+                        return x
+                    elif batch_dims == x.ndim + 1:
+                        return x.unsqueeze(0)
+                    else:
+                        raise ValueError(f"Tensor with shape {x.shape} can't be batch of {batch_dims} dimesions.")
+                self.mod = mod
+            case "identity":
+                self.mod = nn.Identity()
             case "elu":
                 self.mod = nn.ELU()
             case "relu":
@@ -75,23 +80,17 @@ class Stream(AbstractStream):
         return wrap(self.mod(arg) for arg in args)
 
 
-class SplitBatch(nn.BatchNorm3d):
-    def __init__(self, shape=(8, 8, 8), *args, **kwargs):
-        super(SplitBatch, self).__init__(*args, **kwargs)
-        self.shape = shape
+class BiStream(AbstractStream):
+    def __init__(self, name, *args, **kwargs):
+        super(BiStream, self).__init__("Stream", name, *args, **kwargs)
+        match name.lower():
+            case "crossentropy":
+                self.mod = nn.CrossEntropyLoss(*args, **kwargs)
+            case _:
+                raise NotImplemented
 
-    def forward(self, input: Tensor) -> Tensor:
-        n, c, x, y, z = input.shape
-        sx, sy, sz = self.shape
-        fx, fy, fz = x//sx, y//sy, z//sz
-        input = input.view([n, c, fx, sx, fy, sy, fz, sz])\
-            .permute(0, 2, 4, 6, 1, 3, 5, 7)\
-            .reshape([n*fx*fy*fz, c, sx, sy, sz])
-        input = super(SplitBatch, self).forward(input)
-        input = input.view(n, fx, fy, fz, c, sx, sy, sz)\
-            .permute(0, 4, 1, 5, 2, 6, 3, 7)\
-            .reshape([n, c, x, y, z])
-        return input
+    def forward(self, x: Tensor, y: Tensor) -> tuple[Tensor]:
+        return wrap(self.mod(x, y))
 
 
 

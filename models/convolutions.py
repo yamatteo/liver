@@ -1,7 +1,8 @@
 from torch import nn, Tensor
 
-from models.streams import AbstractStream, Stream, wrap
-from models.structures import Sequential
+from . import wrap
+from .structures import Sequential
+from .monostream import Stream
 
 
 # class Conv(AbstractStream):
@@ -70,13 +71,13 @@ def convolutions(name, ich, och, kernel=(3, 3, 3), stride=(1, 1, 1)):
     padding = (kernel[0] // 2, kernel[1] // 2, kernel[2] // 2)
     match name.lower():
         case "conv":
-            return Stream("conv", ich, och, kernel_size=kernel, stride=stride, padding=padding, padding_mode="reflect"),
+            return Stream("Conv3d", ich, och, kernel_size=kernel, stride=stride, padding=padding, padding_mode="reflect"),
         case "pconv":
-            return Stream("conv", ich, och, kernel_size=1, stride=stride),
+            return Stream("Conv3d", ich, och, kernel_size=1, stride=stride),
         case "dconv":
             kernels_per_layer = och // ich
             return Stream(
-                "conv",
+                "Conv3d",
                 ich,
                 ich * kernels_per_layer,
                 kernel_size=kernel,
@@ -88,15 +89,15 @@ def convolutions(name, ich, och, kernel=(3, 3, 3), stride=(1, 1, 1)):
         case "sconv":
             kernels_per_layer = och // ich
             return (
-                Stream("conv", ich, ich*kernels_per_layer, kernel_size=kernel, stride=stride, padding=padding, padding_mode="reflect", groups=ich),
-                Stream("conv", ich*kernels_per_layer, och, kernel_size=1)
+                Stream("Conv3d", ich, ich*kernels_per_layer, kernel_size=kernel, stride=stride, padding=padding, padding_mode="reflect", groups=ich),
+                Stream("Conv3d", ich*kernels_per_layer, och, kernel_size=1)
             )
 
 
-class ConvBlock(AbstractStream):
+class ConvBlock(Stream):
     def __init__(
             self,
-            name: str,
+            type: str,
             channels: list[int],
             *,
             kernel=(3, 3, 3),
@@ -104,37 +105,54 @@ class ConvBlock(AbstractStream):
             actv: str = None,
             norm: str = None,
             drop: str = None,
+            momentum: float = 0.9,
     ):
-        super(ConvBlock, self).__init__("ConvBlock", name, channels, kernel=kernel, stride=stride, actv=actv, norm=norm, drop=drop)
+        super(ConvBlock, self).__init__(None)
 
         layers: list[nn.Module] = [
-            *convolutions(name, channels[0], channels[1], kernel=kernel, stride=stride)
+            *convolutions(type, channels[0], channels[1], kernel=kernel, stride=stride)
         ]
         for i in range(1, len(channels) - 1):
             if actv:
                 layers.append(Stream(actv))
             layers.extend(
                 convolutions(
-                    name,
+                    type,
                     channels[i],
                     channels[i + 1],
                     kernel=kernel,
                 )
             )
         if norm:
-            layers.append(Stream(norm, num_features=channels[-1]))
+            layers.append(Stream(norm, num_features=channels[-1], momentum=momentum))
         if drop:
             layers.append(Stream(drop))
         self.mod = Sequential(*layers)
 
-        name = f"{name.capitalize()}Block"
+        self.repr_dict = dict(
+            name="ConvBlock",
+            args=(type, channels),
+            kwargs=dict(
+                kernel=kernel,
+                stride=stride,
+                actv=actv,
+                norm=norm,
+                drop=drop,
+                momentum=momentum,
+            )
+        )
+
+        type = f"{type.capitalize()}Block"
         kernel = "".join(map(str, kernel))
         stride = "/" + "".join(map(str, stride)) if stride != (1, 1, 1) else ""
         channels = list(map(str, channels))
         actv = f" > {actv} > " if actv else " > "
-        norm = " > " + norm if norm else ""
+        norm = " > " + (norm+(f"*{momentum}" if momentum != 0.9 else "")) if norm else ""
         drop = " > " + drop if drop else ""
-        self.repr = f"{name}[{kernel}{stride}]({actv.join(channels)}{norm}{drop})"
+        self.repr = f"{type}[{kernel}{stride}]({actv.join(channels)}{norm}{drop})"
+
+    def __repr__(self):
+        return self.repr
 
     def forward(self, *args: Tensor) -> tuple[Tensor, ...]:
-        return wrap(self.mod(arg) for arg in args)
+        return wrap(self.mod(*args))

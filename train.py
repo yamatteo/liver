@@ -5,7 +5,7 @@ import torch
 from adabelief_pytorch import AdaBelief
 from torch import nn
 from torch.nn import functional
-
+from torch.utils.data import DataLoader
 import models
 import report
 from rich import print
@@ -33,18 +33,20 @@ def segm_shrink(segm: np.ndarray):
     # segm = torch.argmax(segm, dim=1)
     return segm.numpy()
 
-def train_epoch(model, ds, *, epoch, optimizer, args):
+def train_epoch(model, losses, ds, epoch, optimizer, args):
     """Assuming model is single stream."""
     round_scores = dict()
-
-    for data in ds:
-        key = data["keys"]
-        scan = data["scan"]
-        segm = data["segm"]
-        pred, = model(torch.tensor(scan, dtype=torch.float32, device=args.device).reshape([1, *scan.shape]))
-        loss = torch.nn.functional.cross_entropy(pred, torch.tensor(segm_shrink(segm), device=args.device))
+    round_recall = 0
+    assert args.batch_size == 1
+    dl = DataLoader(ds, batch_size=args.batch_size)
+    for data in dl:
+        key = int(data["keys"][0])
+        model(data)
+        losses(data)
+        loss = (data["cross"] - (data["recall"] - 1))/args.grad_accumulation_steps
         loss.backward()
         round_scores.update({key: loss.item()})
+        round_recall += data["recall"].item()
         if (key + 1) % args.grad_accumulation_steps == 0 or key + 1 == len(ds):
             optimizer.step()
             optimizer.zero_grad()
@@ -52,7 +54,8 @@ def train_epoch(model, ds, *, epoch, optimizer, args):
     mean_loss = sum(round_scores.values()) * args.grad_accumulation_steps / len(ds)
     print(
         f"Training epoch {epoch + 1}/{args.epochs}. "
-        f"Loss per scan: {mean_loss:.2e}"
+        f"Loss per scan: {mean_loss:.2e}. "
+        f"Mean recall: {round_recall/len(ds):.2f}"
     )
     report.append({f"loss": mean_loss})
 
@@ -61,31 +64,26 @@ def validation_round(model, ds, *, args):
     # first_device, last_device = streams[0].device, streams[-1].device
     scores = []
     samples = []
-    for data in ds:
-        name = data.get("name", "no name")
+    dl = DataLoader(ds)
+    for data in dl:
+        name = data.get("name", ["no name"])[0]
         scan = data["scan"]
         segm = data["segm"]
         pred = []
-        target = []
         for (x, t) in slices(scan, segm, shape=args.slice_shape, pad_up_to=1):
-            y, = model(torch.tensor(x, dtype=torch.float32, device=args.device).reshape([1, *x.shape]))
-            pred.append(y)
-            target.append(segm_shrink(t))
-        scan = scan_shrink(scan)
-        target = np.concatenate(target, axis=-1)[..., :scan.shape[-1]]
-        pred = torch.cat(pred, dim=-1)[..., :scan.shape[-1]].cpu().numpy()
-        target = np.argmax(target, axis=1)
-        pred = np.argmax(pred, axis=1)
-        intersection = np.sum(pred * target) + 1
-        union = np.sum(np.clip(pred + target, 0, 1)) + 1
+            items = model({"scan": x})
+            pred.append(items["pred"])
+        pred = torch.argmax(torch.cat(pred, dim=-1)[..., :scan.shape[-1]], dim=1)
+        intersection = torch.sum(pred * segm).item() + 0.1
+        union = torch.sum(torch.clamp(pred + segm, 0, 1)).item() + 0.1
         scores.append({"name": name, "value": intersection/union})
         for _ in range(4):
             samples.append(report.sample(
-                scan,
+                scan.cpu().numpy(),
                 # scans[1].detach().cpu().numpy(),
-                pred,
+                pred.cpu().numpy(),
                 # torch.argmax(preds[1], dim=1).detach().cpu().numpy(),
-                target
+                segm.cpu().numpy()
             ))
     print("Validation scores are:")
     for score in scores:
@@ -95,7 +93,7 @@ def validation_round(model, ds, *, args):
     mean_score = sum(item["value"] for item in scores) / len(scores)
     report.append({f"validation_score": mean_score, "samples":samples}, commit=False)
 
-def train(model, tds, vds, *, args):
+def train(model, losses, tds, vds, args):
     optimizer = AdaBelief(
             model.parameters(),
             lr=args.lr,
@@ -108,9 +106,9 @@ def train(model, tds, vds, *, args):
     for epoch in range(args.epochs):
         if (epoch+1) % 20 == 0:
             validation_round(model, vds, args=args)
-            torch.save(model.state_dict(), args.models_path / "last.pth")
+            model.save()
         else:
-            train_epoch(model, tds, epoch=epoch, optimizer=optimizer, args=args)
+            train_epoch(model, losses, ds=tds, epoch=epoch, optimizer=optimizer, args=args)
 # def train(model: models.Pipeline, train_dataset, valid_dataset, args):
 #     epoch = 0
 #     next_key = 0

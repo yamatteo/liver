@@ -94,9 +94,11 @@ class Wrapper(nn.Module):
         self.rank = rank
         match (torch.cuda.is_available(), rank):
             case (False, _) | (True, None):
+                # print("Defining cpu input_to")
                 def input_to(x):
                     return torch.as_tensor(x, device=torch.device("cpu"))
             case (True, int(r)):
+                # print(f"Defining cuda:{r} input_to")
                 def input_to(x):
                     return torch.as_tensor(x, device=torch.device(f"cuda:{r}"))
             case _:
@@ -131,6 +133,7 @@ class Wrapper(nn.Module):
 
     def forward(self, items: dict) -> dict:
         tensors = tuple(self.input_to(items[key]) for key in self.inputs)
+        # print(f"First input device is {tensors[0].device}")
         tensors = self.stream(*tensors)
         items.update({key: tensors[i] for i, key in enumerate(self.outputs)})
         return items

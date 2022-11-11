@@ -20,6 +20,9 @@ class Stream(nn.Module):
         return self.repr
 
     def forward(self, *args: Tensor) -> tuple[Tensor, ...]:
+        # if isinstance(self.mod, nn.Conv3d):
+        #     print("Conv3d weight is on", self.mod.weight.device)
+        #     print("Args[0] is on", args[0].device)
         return wrap(self.mod(*args))
 
 

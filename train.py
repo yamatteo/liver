@@ -74,6 +74,7 @@ def validation_round(model, ds, *, args):
             items = model({"scan": x})
             pred.append(items["pred"])
         pred = torch.argmax(torch.cat(pred, dim=-1)[..., :scan.shape[-1]], dim=1)
+        segm = torch.as_tensor(segm, device=pred.device)
         intersection = torch.sum(pred * segm).item() + 0.1
         union = torch.sum(torch.clamp(pred + segm, 0, 1)).item() + 0.1
         scores.append({"name": name, "value": intersection/union})

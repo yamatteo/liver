@@ -154,6 +154,7 @@ if __name__ == '__main__':
             rectify=False,
             print_change_log=False,
         )
+        validation_round(model, ds=valid_dataset, args=args)
         train(model, losses, tds=train_dataset, vds=valid_dataset, args=args)
         # train(ddp_model, train_dataset, train_loader, gpu, args)
         # train(model=model, train_dataset=train_dataset, valid_dataset=valid_dataset, args=args)

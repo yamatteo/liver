@@ -45,6 +45,8 @@ set -x
 
 # For the "gpu_p5" partition, the code must be compiled with the compatible modules.
 # Code execution
+cd "/gpfswork/rech/otc/uiu95bi/livertumor"
+git checkout jeanzay
 cd "/gpfswork/rech/otc/uiu95bi/runs"
 source /gpfswork/rech/otc/uiu95bi/venv_module_3_10_4/bin/activate
 wandb offline

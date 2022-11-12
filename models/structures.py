@@ -11,8 +11,12 @@ from .monostream import Stream
 class Structure(nn.Module):
     def __init__(self, name, *args, **kwargs):
         super(Structure, self).__init__()
-        r_args = ', '.join(map(str, args))
-        r_kwargs = ', '.join([key + '=' + str(value) for key, value in kwargs.items()])
+        repr_args = str(", ").join([str(a) for a in args if not isinstance(a, (Structure, Stream))])
+        repr_kwargs = str(", ").join([
+            k + '=' + str(a)
+            for k, a in kwargs.items()
+            if not isinstance(a, (Structure, Stream))
+        ])
         rd_args = tuple(arg.repr_dict if isinstance(arg, (Structure, Stream)) else arg for arg in args)
         rd_kwargs = {
             key: value.repr_dict if isinstance(value, (Structure, Stream)) else value
@@ -20,7 +24,7 @@ class Structure(nn.Module):
         }
         self.mod = None
         self.mods = []
-        self.repr = f"{name}({r_args}{', ' if args and kwargs else ''}{r_kwargs})"
+        self.repr = f"{name}({repr_args}{', ' if args and kwargs else ''}{repr_kwargs})"
         self.repr_dict = dict(
             name=name,
             args=rd_args,

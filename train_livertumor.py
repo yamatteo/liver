@@ -6,6 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import torch
+import rich
 from adabelief_pytorch import AdaBelief
 from rich import print
 
@@ -17,6 +18,7 @@ from models import *
 from train import validation_round, train
 
 debug = not torch.cuda.is_available()
+rich.reconfigure(width=180)
 
 if __name__ == '__main__':
     args = SimpleNamespace(
@@ -58,7 +60,10 @@ if __name__ == '__main__':
                 ),
                 dim=1,
             ),
-            ConvBlock([16, 8, 4, 2], kernel_size=(1, 1, 1), actv="ReLU"),
+            SkipCat(
+                ConvBlock([16, 16, 16, 16], actv="ELU", norm="InstanceNorm3d", drop="Dropout3d")
+            ),
+            ConvBlock([32, 16, 8, 4, 2], kernel_size=(1, 1, 1), actv="ReLU"),
         ),
         inputs=["scan"],
         outputs=["pred"],
@@ -117,9 +122,11 @@ if __name__ == '__main__':
         f"Each element has a scan of shape {train_dataset[0]['scan'].shape} "
         f"and a segm of shape {train_dataset[0]['segm'].shape}"
     )
+    print(f"They are slices taken from a population of {len(list(train_cases))} cases.")
     print(f"Validation dataset has {len(valid_dataset)} elements.")
 
     run = report.init(config=vars(args), id=args.id, mute=debug)
+    args.start_time = time.time()
     try:
         optimizer = AdaBelief(
             model.parameters(),

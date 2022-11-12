@@ -18,7 +18,6 @@ cuda0 = torch.device("cuda:0")
 debug = Path(".env").exists()
 shrink_shape = (16, 16, 4)
 
-
 # def scan_shrink(scan: np.ndarray):
 #     shape = scan.shape
 #     scan = torch.tensor(scan, dtype=torch.float32).view([1, *shape])
@@ -40,15 +39,17 @@ def train_epoch(model, losses, ds, epoch, optimizer, args):
     """Assuming model is single stream."""
     round_scores = dict()
     round_recall = 0
+    round_cross = 0
     assert args.batch_size == 1
     dl = DataLoader(ds, batch_size=args.batch_size)
     for data in dl:
         key = int(data["keys"][0])
         model(data)
         losses(data)
-        loss = (data["cross"] - (data["recall"] - 1)) / args.grad_accumulation_steps
+        loss = (data["cross"] + (1 - data["recall"])) / args.grad_accumulation_steps
         loss.backward()
         round_scores.update({key: loss.item()})
+        round_cross += data["cross"].item()
         round_recall += data["recall"].item()
         if (key + 1) % args.grad_accumulation_steps == 0 or key + 1 == len(ds):
             optimizer.step()
@@ -57,8 +58,9 @@ def train_epoch(model, losses, ds, epoch, optimizer, args):
     mean_loss = sum(round_scores.values()) * args.grad_accumulation_steps / len(ds)
     print(
         f"Training epoch {epoch + 1}/{args.epochs}. "
-        f"Loss per scan: {mean_loss:.2e}. "
-        f"Mean recall: {round_recall / len(ds):.2f}"
+        f"Loss: {mean_loss:.2e}. "
+        f"Cross: {round_cross / len(ds):.3f}. "
+        f"Recall: {round_recall / len(ds):.2f}."
     )
     report.append({f"loss": mean_loss})
 
@@ -78,7 +80,7 @@ def validation_round(model, ds, *, epoch=0, args):
             items = model({"scan": x})
             pred.append(items["pred"])
         pred = torch.argmax(torch.cat(pred, dim=-1)[..., :scan.shape[-1]], dim=1)
-        segm = torch.as_tensor(segm, device=pred.device)
+        segm = torch.as_tensor(segm, device=pred.device).clamp(0, 1)
         intersection = torch.sum(pred * segm).item() + 0.1
         union = torch.sum(torch.clamp(pred + segm, 0, 1)).item() + 0.1
         scores.append({"name": name, "value": intersection / union})
@@ -95,13 +97,17 @@ def validation_round(model, ds, *, epoch=0, args):
         name = score["name"]
         value = score["value"]
         print(f"{name:>12}:{100 * value:6.1f}% iou")
-    if epoch > 0:
-        mean_time = (time.time() - args.start_time) / epoch
-        print(f"Mean time: {mean_time:.0f}s per training epoch.")
-    else:
-        mean_time = 0
+    total_time = time.time() - args.start_time
+    mean_time = total_time / max(1, epoch)
+    print(f"Mean time: {mean_time:.0f}s per training epoch.")
     mean_score = sum(item["value"] for item in scores) / len(scores)
-    report.append({"mean_time": mean_time, "validation_score": mean_score, "samples": samples}, commit=False)
+    report.append({
+        "mean_time": mean_time,
+        "samples": samples,
+        "score_over_epochs": mean_score / max(1, epoch),
+        "score_over_time": mean_score / total_time,
+        "validation_score": mean_score,
+    }, commit=False)
 
 
 def train(model, losses, tds, vds, args):
@@ -114,12 +120,12 @@ def train(model, losses, tds, vds, args):
         rectify=False,
         print_change_log=False,
     )
-    args.start_time = time.time()
     for epoch in range(args.epochs):
         train_epoch(model, losses, ds=tds, epoch=epoch, optimizer=optimizer, args=args)
         if (epoch + 1) % 20 == 0:
             validation_round(model, vds, epoch=epoch+1, args=args)
             model.save()
+    report.append({"mean_time": (time.time() - args.start_time)/args.epochs})
 # def train(model: models.Pipeline, train_dataset, valid_dataset, args):
 #     epoch = 0
 #     next_key = 0

@@ -26,7 +26,7 @@ if __name__=="__main__":
         _, bottom, top, height = nibabelio.load_registration_data(sources/case_name)
         data = nibabelio.load(sources/case_name, scan=False, train=True)
         segm = data["segm"]
-        pred = nibabelio._load_ndarray(sources/case_name/prediction_name)
+        pred = nibabelio.load_ndarray(sources / case_name / prediction_name)
         assert pred.shape[-1] == height
         pred = pred[..., bottom:top]
         b, l, t = scores(pred, segm)

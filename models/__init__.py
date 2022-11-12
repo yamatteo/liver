@@ -4,15 +4,12 @@ from torch import Tensor
 
 
 def wrap(*args) -> tuple[Tensor, ...]:
-    match args:
-        case ():
-            return ()
-        case (tuple() | list() | GeneratorType() as items, *rest):
-            return *wrap(*items), *wrap(*rest)
-        case (item, ):
-            return item,
-        case (item, *rest):
-            return item, *wrap(*rest)
+    if args == ():
+        return ()
+    first, *rest = args
+    if isinstance(first, (tuple, list, GeneratorType)):
+        return *wrap(*first), *wrap(*rest)
+    return first, *wrap(*rest)
 
 
 from .convolutions import ConvBlock

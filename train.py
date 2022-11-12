@@ -1,3 +1,4 @@
+import time
 from pathlib import Path
 
 import numpy as np
@@ -15,23 +16,25 @@ cuda0 = torch.device("cuda:0")
 # cuda1 = torch.device("cuda:1")
 
 debug = Path(".env").exists()
-res = 64 if debug else 512
 shrink_shape = (16, 16, 4)
 
-def scan_shrink(scan: np.ndarray):
-    shape = scan.shape
-    scan = torch.tensor(scan, dtype=torch.float32).view([1, *shape])
-    scan = functional.avg_pool3d(scan, kernel_size=shrink_shape)
-    return scan.numpy()
 
-def segm_shrink(segm: np.ndarray):
-    shape = segm.shape
-    segm = np.clip(segm, 0, 1)
-    segm = torch.tensor(segm, dtype=torch.int64).view([1, *shape])
-    segm = functional.one_hot(segm, num_classes=2).permute([0, 4, 1, 2, 3]).to(dtype=torch.float32)
-    segm = functional.avg_pool3d(segm, kernel_size=shrink_shape)
-    # segm = torch.argmax(segm, dim=1)
-    return segm.numpy()
+# def scan_shrink(scan: np.ndarray):
+#     shape = scan.shape
+#     scan = torch.tensor(scan, dtype=torch.float32).view([1, *shape])
+#     scan = functional.avg_pool3d(scan, kernel_size=shrink_shape)
+#     return scan.numpy()
+#
+#
+# def segm_shrink(segm: np.ndarray):
+#     shape = segm.shape
+#     segm = np.clip(segm, 0, 1)
+#     segm = torch.tensor(segm, dtype=torch.int64).view([1, *shape])
+#     segm = functional.one_hot(segm, num_classes=2).permute([0, 4, 1, 2, 3]).to(dtype=torch.float32)
+#     segm = functional.avg_pool3d(segm, kernel_size=shrink_shape)
+#     # segm = torch.argmax(segm, dim=1)
+#     return segm.numpy()
+
 
 def train_epoch(model, losses, ds, epoch, optimizer, args):
     """Assuming model is single stream."""
@@ -43,7 +46,7 @@ def train_epoch(model, losses, ds, epoch, optimizer, args):
         key = int(data["keys"][0])
         model(data)
         losses(data)
-        loss = (data["cross"] - (data["recall"] - 1))/args.grad_accumulation_steps
+        loss = (data["cross"] - (data["recall"] - 1)) / args.grad_accumulation_steps
         loss.backward()
         round_scores.update({key: loss.item()})
         round_recall += data["recall"].item()
@@ -55,12 +58,13 @@ def train_epoch(model, losses, ds, epoch, optimizer, args):
     print(
         f"Training epoch {epoch + 1}/{args.epochs}. "
         f"Loss per scan: {mean_loss:.2e}. "
-        f"Mean recall: {round_recall/len(ds):.2f}"
+        f"Mean recall: {round_recall / len(ds):.2f}"
     )
     report.append({f"loss": mean_loss})
 
+
 @torch.no_grad()
-def validation_round(model, ds, *, args):
+def validation_round(model, ds, *, epoch=0, args):
     # first_device, last_device = streams[0].device, streams[-1].device
     scores = []
     samples = []
@@ -77,7 +81,7 @@ def validation_round(model, ds, *, args):
         segm = torch.as_tensor(segm, device=pred.device)
         intersection = torch.sum(pred * segm).item() + 0.1
         union = torch.sum(torch.clamp(pred + segm, 0, 1)).item() + 0.1
-        scores.append({"name": name, "value": intersection/union})
+        scores.append({"name": name, "value": intersection / union})
         for _ in range(4):
             samples.append(report.sample(
                 scan.cpu().numpy(),
@@ -91,25 +95,31 @@ def validation_round(model, ds, *, args):
         name = score["name"]
         value = score["value"]
         print(f"{name:>12}:{100 * value:6.1f}% iou")
+    if epoch > 0:
+        mean_time = (time.time() - args.start_time) / epoch
+        print(f"Mean time: {mean_time:.0f}s per training epoch.")
+    else:
+        mean_time = 0
     mean_score = sum(item["value"] for item in scores) / len(scores)
-    report.append({f"validation_score": mean_score, "samples":samples}, commit=False)
+    report.append({"mean_time": mean_time, "validation_score": mean_score, "samples": samples}, commit=False)
+
 
 def train(model, losses, tds, vds, args):
     optimizer = AdaBelief(
-            model.parameters(),
-            lr=args.lr,
-            eps=1e-8,
-            betas=(0.9, 0.999),
-            weight_decouple=False,
-            rectify=False,
-            print_change_log=False,
-        )
+        model.parameters(),
+        lr=args.lr,
+        eps=1e-8,
+        betas=(0.9, 0.999),
+        weight_decouple=False,
+        rectify=False,
+        print_change_log=False,
+    )
+    args.start_time = time.time()
     for epoch in range(args.epochs):
-        if (epoch+1) % 20 == 0:
-            validation_round(model, vds, args=args)
+        train_epoch(model, losses, ds=tds, epoch=epoch, optimizer=optimizer, args=args)
+        if (epoch + 1) % 20 == 0:
+            validation_round(model, vds, epoch=epoch+1, args=args)
             model.save()
-        else:
-            train_epoch(model, losses, ds=tds, epoch=epoch, optimizer=optimizer, args=args)
 # def train(model: models.Pipeline, train_dataset, valid_dataset, args):
 #     epoch = 0
 #     next_key = 0

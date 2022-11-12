@@ -2,15 +2,10 @@ from __future__ import annotations
 
 import pickle
 from pathlib import Path
-from typing import Iterator
 
-import elasticdeform
 import nibabel
 import numpy as np
-import torch
-import torch.utils.data
 from rich import print
-from torch.nn import functional
 
 
 # class Bundle:
@@ -94,7 +89,7 @@ from torch.nn import functional
 
 ### Nibabel Input/Output
 
-def _load_ndarray(file_path: Path) -> np.ndarray:
+def load_ndarray(file_path: Path) -> np.ndarray:
     image = nibabel.load(file_path)
     return np.array(image.dataobj, dtype=np.int16)
 
@@ -111,7 +106,7 @@ def load(case_path: Path, scan: bool = True, train: bool = False, clip: tuple[in
     _, bottom, top, _ = load_registration_data(case_path)
     if scan:
         scan = np.stack([
-            _load_ndarray(case_path / f"registered_phase_{phase}.nii.gz")
+            load_ndarray(case_path / f"registered_phase_{phase}.nii.gz")
             for phase in ["b", "a", "v", "t"]
         ])
         scan = scan[..., bottom:top]
@@ -122,7 +117,7 @@ def load(case_path: Path, scan: bool = True, train: bool = False, clip: tuple[in
         scan = None
 
     if train:
-        segm = _load_ndarray(case_path / f"segmentation.nii.gz")
+        segm = load_ndarray(case_path / f"segmentation.nii.gz")
         assert np.all(segm < 3), "segmentation has indices above 2"
         segm = segm[..., bottom:top]
         segm = segm.astype(np.int64)

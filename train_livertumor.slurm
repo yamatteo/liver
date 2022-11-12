@@ -38,7 +38,8 @@ module purge
 #module load cpuarch/amd
 
 # Loading of modules
-module load pytorch-gpu-1.12.1
+module load pytorch-gpu/py3/1.11.0
+source /gpfswork/rech/otc/uiu95bi/venv_module_3_10_4/bin/activate
 
 # Echo of launched commands
 set -x
@@ -48,6 +49,5 @@ set -x
 cd "/gpfswork/rech/otc/uiu95bi/livertumor"
 git checkout jeanzay
 cd "/gpfswork/rech/otc/uiu95bi/runs"
-source /gpfswork/rech/otc/uiu95bi/venv_module_3_10_4/bin/activate
 wandb offline
-PYTHONPATH=/gpfswork/rech/otc/uiu95bi/livertumor srun python "/gpfswork/rech/otc/uiu95bi/livertumor/main.py"
+PYTHONPATH=/gpfswork/rech/otc/uiu95bi/livertumor srun python "/gpfswork/rech/otc/uiu95bi/livertumor/train_livertumor.py"

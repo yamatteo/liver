@@ -1,19 +1,16 @@
 import io
 import multiprocessing
+import tempfile
 from contextlib import redirect_stdout
-
-import nibabelio
 from pathlib import Path
 
-import numpy as np
-import yaml
-import tempfile
 import nibabel
-from radiomics import featureextractor, getTestCase
-
+import numpy as np
 import torch
-from torch import Tensor
-from torch.nn import functional, Parameter
+from radiomics import featureextractor
+from torch.nn import Parameter
+
+import nibabelio
 
 params = {
     'imageType': {
@@ -106,7 +103,7 @@ def masks(segm: np.ndarray):
 def extract(case_path):
     affine, _, _, _ = nibabelio.load_registration_data(case_path)
     # scan = utils.ndarray.load_registered(case_path, phase="v")
-    pred = nibabelio._load_ndarray(case_path/"nnunet_prediction.nii.gz")
+    pred = nibabelio.load_ndarray(case_path / "nnunet_prediction.nii.gz")
     # scans = load_registered_case()
     liver, perit, tumor = masks(pred)
 

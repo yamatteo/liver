@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import types
 import typing
-from typing import Iterable
 
 import numpy as np
 
 T = typing.TypeVar('T')
 throuple = types.GenericAlias(tuple, (T,) * 3)
-int3d = throuple[int | None]
+int3d = throuple[typing.Union[int, None]]
 
 
 def slices(*args, shape: int3d, stride: int3d = (None, None, None), pad_up_to: float = 0.5):

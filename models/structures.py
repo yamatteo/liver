@@ -1,3 +1,5 @@
+from typing import Union
+
 import torch
 from torch import Tensor
 from torch import nn
@@ -11,22 +13,28 @@ class Structure(nn.Module):
         super(Structure, self).__init__()
         r_args = ', '.join(map(str, args))
         r_kwargs = ', '.join([key + '=' + str(value) for key, value in kwargs.items()])
+        rd_args = tuple(arg.repr_dict if isinstance(arg, (Structure, Stream)) else arg for arg in args)
+        rd_kwargs = {
+            key: value.repr_dict if isinstance(value, (Structure, Stream)) else value
+            for key, value in kwargs.items()
+        }
         self.mod = None
         self.mods = []
         self.repr = f"{name}({r_args}{', ' if args and kwargs else ''}{r_kwargs})"
         self.repr_dict = dict(
             name=name,
-            args=args,
-            kwargs=kwargs,
+            args=rd_args,
+            kwargs=rd_kwargs,
         )
 
     def __repr__(self):
         modules = [self.mod] if self.mod is not None else self.mods
         content = str("\n").join([repr(mod) for mod in modules])
         return str("\n    ").join([
-            self.repr+(":" if modules else ""),
+            self.repr + (":" if modules else ""),
             *content.splitlines(),
         ])
+
 
 class Cat(Structure):
     def __init__(self, dim=1):
@@ -47,8 +55,8 @@ class Select(Structure):
 
 
 class SkipCat(Structure):
-    def __init__(self, module: Stream | Structure, dim=1):
-        super(SkipCat, self).__init__("SkipCat", dim=dim)
+    def __init__(self, module: Union[Stream, Structure], dim=1):
+        super(SkipCat, self).__init__("SkipCat", module, dim=dim)
         self.mod = module
         self.dim = dim
 
@@ -57,8 +65,8 @@ class SkipCat(Structure):
 
 
 class Separated(Structure):
-    def __init__(self, *modules: Stream | Structure):
-        super(Separated, self).__init__("Separated")
+    def __init__(self, *modules: Union[Stream, Structure]):
+        super(Separated, self).__init__("Separated", *modules)
         self.mods = nn.ModuleList(modules)
 
     def forward(self, *args) -> tuple[Tensor, ...]:
@@ -66,8 +74,8 @@ class Separated(Structure):
 
 
 class Split(Structure):
-    def __init__(self, *modules: Stream | Structure):
-        super(Split, self).__init__("Split")
+    def __init__(self, *modules: Union[Stream, Structure]):
+        super(Split, self).__init__("Split", *modules)
         self.mods = nn.ModuleList(modules)
 
     def forward(self, *args) -> tuple[Tensor, ...]:
@@ -75,8 +83,8 @@ class Split(Structure):
 
 
 class Sequential(Structure):
-    def __init__(self, *modules: Stream | Structure):
-        super(Sequential, self).__init__("Sequential")
+    def __init__(self, *modules: Union[Stream, Structure]):
+        super(Sequential, self).__init__("Sequential", *modules)
         self.mods = nn.ModuleList(modules)
 
     def forward(self, *args) -> tuple[Tensor, ...]:
@@ -92,21 +100,10 @@ class Wrapper(nn.Module):
         self.inputs = inputs
         self.outputs = outputs
         self.rank = rank
-        match (torch.cuda.is_available(), rank):
-            case (False, _) | (True, None):
-                # print("Defining cpu input_to")
-                def input_to(x):
-                    return torch.as_tensor(x, device=torch.device("cpu"))
-            case (True, int(r)):
-                # print(f"Defining cuda:{r} input_to")
-                def input_to(x):
-                    return torch.as_tensor(x, device=torch.device(f"cuda:{r}"))
-            case _:
-                raise ValueError(
-                    f"Combination (torch.cuda.is_available(), rank)="
-                    f"{(torch.cuda.is_available(), rank)} is not acceptable."
-                )
-        self.input_to = input_to
+        if torch.cuda.is_available() and isinstance(rank, int):
+            self.input_to = lambda x: torch.as_tensor(x, device=torch.device(f"cuda:{rank}"))
+        else:
+            self.input_to = lambda x: torch.as_tensor(x, device=torch.device("cpu"))
         self.to_device()
 
         self.storage = storage
@@ -150,4 +147,3 @@ class Wrapper(nn.Module):
         if self.storage is None:
             raise AttributeError("This stream does not have a storage file.")
         torch.save(self.stream.state_dict(), self.storage)
-

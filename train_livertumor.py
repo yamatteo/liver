@@ -5,78 +5,67 @@ import traceback
 from pathlib import Path
 from types import SimpleNamespace
 
-# import idr_torch as idr
 import torch
-import yaml
 from adabelief_pytorch import AdaBelief
-from torch import nn
+from rich import print
 
-# from torchvision import datasets, transforms
 import dataset
-import models
 import nibabelio
 import path_explorer as px
 import report
-from rich import print
-
-from train import train_epoch, validation_round, train
 from models import *
+from train import validation_round, train
 
-debug = Path(".env").exists()
-res = 64 if debug else 512
+debug = not torch.cuda.is_available()
 
 if __name__ == '__main__':
     args = SimpleNamespace(
         batch_size=1,
-        buffer_size=3 if debug else 40,
-        # class_weights=[1, 5, 10],
-        # dry_run=False,
+        buffer_size=5 if debug else 40,
         device=torch.device("cpu") if debug else torch.device("cuda:0"),
         epochs=20 if debug else 200,
         grad_accumulation_steps=10,
         finals=2,
-        id=f"HOGWILD{int(time.time()) // 120:09X}",
-        local_rank=0,  # idr.local_rank,
+        id=f"LiverTumor{int(time.time()) // 120:06X}",
         lr=0.002,
         models_path=Path("../saved_models") if debug else Path('/gpfswork/rech/otc/uiu95bi/saved_models'),
         n_samples=4,
         norm_momentum=0.9,
-        rank=0,  # idr.rank,
-        # seed=1,
-        # sgd_momentum=0.9,
         slice_shape=(32, 32, 8) if debug else (512, 512, 32),
         sources_path=Path('/gpfswork/rech/otc/uiu95bi/sources'),
         staging_size=1,
-        warmup_size=0,
     )
-
-    run = report.init(config=vars(args), id=args.id, mute=debug)
     print(f"Run with options: {vars(args)}")
 
-    # dist.init_process_group(backend='nccl', init_method='env://', world_size=idr.size, rank=idr.rank)
-
-    print("Try building model...")
     model = Wrapper(
         Sequential(
             Stream("as_tensor", dtype=torch.float32),
-            ConvBlock("conv", [4, 16, 16], actv="ELU", norm="InstanceNorm3d"),
             SkipCat(
                 Sequential(
-                    Stream("MaxPool3d", kernel_size=(2, 2, 2)),
-                    ConvBlock("conv", [16, 32, 32], actv="ELU", norm="InstanceNorm3d"),
-                    ConvBlock("conv", [32, 16, 16], actv="ELU", norm="InstanceNorm3d", drop="Dropout3d"),
-                    Stream("Upsample", scale_factor=(2, 2, 2), mode='nearest')
+                    Stream("AvgPool3d", kernel_size=(2, 2, 1)),
+                    ConvBlock([4, 16, 16], actv="ELU", norm="InstanceNorm3d"),
+                    SkipCat(
+                        Sequential(
+                            Stream("MaxPool3d", kernel_size=(2, 2, 1)),
+                            ConvBlock([16, 32, 32], actv="ELU", norm="InstanceNorm3d"),
+                            ConvBlock([32, 16, 16], actv="ELU", norm="InstanceNorm3d", drop="Dropout3d"),
+                            Stream("Upsample", scale_factor=(2, 2, 1), mode='nearest')
+                        ),
+                        dim=1,
+                    ),
+                    ConvBlock([32, 16, 12], actv="ELU", norm="InstanceNorm3d", drop="Dropout3d"),
+                    Stream("Upsample", scale_factor=(2, 2, 1), mode='trilinear')
                 ),
                 dim=1,
             ),
-            ConvBlock("conv", [32, 16, 16], actv="ELU", norm="InstanceNorm3d", drop="Dropout3d"),
-            ConvBlock("pconv", [16, 8, 4, 2], actv="ReLU"),
+            ConvBlock([16, 8, 4, 2], kernel_size=(1, 1, 1), actv="ReLU"),
         ),
         inputs=["scan"],
         outputs=["pred"],
         rank=0,
         storage=args.models_path/"last.pth",
     )
+
     losses = Wrapper(
         Sequential(
             Separated(
@@ -92,12 +81,13 @@ if __name__ == '__main__':
         outputs=["cross", "recall"],
         rank=0,
     )
+
     model.to_device()
     losses.to_device()
-    # models.set_momentum(model, args.norm_momentum)
 
     print("Using model:", repr(model))
     args.arch = model.stream.repr_dict
+
     train_cases, valid_cases = px.split_trainables(args.sources_path)
     train_cases = random.sample(train_cases, len(train_cases))
 
@@ -129,21 +119,7 @@ if __name__ == '__main__':
     )
     print(f"Validation dataset has {len(valid_dataset)} elements.")
 
-    # train_sampler = torch.utils.data.distributed.DistributedSampler(
-    #     train_dataset,
-    #     num_replicas=idr.size,
-    #     rank=idr.rank,
-    # )
-    #
-    # train_loader = torch.utils.data.DataLoader(
-    #     dataset=train_dataset,
-    #     batch_size=args.batch_size,
-    #     shuffle=False,
-    #     num_workers=0,
-    #     pin_memory=True,
-    #     sampler=train_sampler,
-    # )
-
+    run = report.init(config=vars(args), id=args.id, mute=debug)
     try:
         optimizer = AdaBelief(
             model.parameters(),

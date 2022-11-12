@@ -27,46 +27,45 @@ class Stream(nn.Module):
 
 
 def build(name, *args, **kwargs):
-    match name:
-        case None:
-            return None
-        case "argmax":
-            return lambda x: torch.argmax(x, dim=kwargs.get("dim", None))
-        case "as_tensor":
-            batch_dims = kwargs.get("batch_dims", None)
-            device = kwargs.get("device", None) if torch.cuda.is_available() else "cpu"
-            dtype = kwargs.get("dtype", None)
-            kwargs = {}
-            if device:
-                kwargs["device"] = device
-            if dtype:
-                kwargs["dtype"] = dtype
+    if name is None:
+        return None
+    elif name == "argmax":
+        return lambda x: torch.argmax(x, dim=kwargs.get("dim", None))
+    elif name == "as_tensor":
+        batch_dims = kwargs.get("batch_dims", None)
+        device = kwargs.get("device", None) if torch.cuda.is_available() else "cpu"
+        dtype = kwargs.get("dtype", None)
+        kwargs = {}
+        if device:
+            kwargs["device"] = device
+        if dtype:
+            kwargs["dtype"] = dtype
 
-            def mod(x):
-                if batch_dims is None or batch_dims==x.ndim:
-                    return torch.as_tensor(x, **kwargs)
-                return torch.as_tensor(x, **kwargs).unsqueeze(0)
+        def mod(x):
+            if batch_dims is None or batch_dims==x.ndim:
+                return torch.as_tensor(x, **kwargs)
+            return torch.as_tensor(x, **kwargs).unsqueeze(0)
 
-            return mod
-        case "Clamp":
-            return lambda x: torch.clamp(x, *args)
-        case "Recall":
-            argmax_input_dim = kwargs.get("argmax_input_dim", None)
-            def recall(input, target):
-                if argmax_input_dim:
-                    input = torch.argmax(input, dim=argmax_input_dim)
-                return (0.1 + torch.sum(torch.minimum(input, target))) / (0.1 + torch.sum(target))
-            return recall
-        case "FoldBatchNorm3d":
-            return FoldBatchNorm3d(*args, **kwargs)
-        case "unmax":
-            kernel = tuple(map(int, args[0]))
-            return nn.Upsample(scale_factor=kernel, mode='nearest')
-        case "unavg":
-            kernel = tuple(map(int, args[0]))
-            return nn.Upsample(scale_factor=kernel, mode='trilinear')
-        case _:
-            return eval(f"nn.{name}")(*args, **kwargs)
+        return mod
+    elif name == "Clamp":
+        return lambda x: torch.clamp(x, *args)
+    elif name == "Recall":
+        argmax_input_dim = kwargs.get("argmax_input_dim", None)
+        def recall(input, target):
+            if argmax_input_dim:
+                input = torch.argmax(input, dim=argmax_input_dim)
+            return (0.1 + torch.sum(torch.minimum(input, target))) / (0.1 + torch.sum(target))
+        return recall
+    elif name == "FoldBatchNorm3d":
+        return FoldBatchNorm3d(*args, **kwargs)
+    elif name == "unmax":
+        kernel = tuple(map(int, args[0]))
+        return nn.Upsample(scale_factor=kernel, mode='nearest')
+    elif name == "unavg":
+        kernel = tuple(map(int, args[0]))
+        return nn.Upsample(scale_factor=kernel, mode='trilinear')
+    else:
+        return eval(f"nn.{name}")(*args, **kwargs)
 
 
 class FoldBatchNorm3d(nn.BatchNorm3d):

@@ -25,6 +25,7 @@ if __name__ == '__main__':
     args = SimpleNamespace(
         batch_size=1,
         buffer_size=5 if debug else 40,
+        debug=debug,
         device=torch.device("cpu") if debug else torch.device("cuda:0"),
         epochs=20 if debug else 200,
         grad_accumulation_steps=10,
@@ -76,7 +77,7 @@ if __name__ == '__main__':
         inputs=["scan"],
         outputs=["pred"],
         rank=0,
-        storage=args.models_path/"last.pth",
+        storage=args.models_path / "last.pth",
     )
 
     losses = Wrapper(

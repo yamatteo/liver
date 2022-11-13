@@ -14,9 +14,8 @@ from slicing import slices
 
 cuda0 = torch.device("cuda:0")
 # cuda1 = torch.device("cuda:1")
-
-debug = Path(".env").exists()
 shrink_shape = (16, 16, 4)
+
 
 # def scan_shrink(scan: np.ndarray):
 #     shape = scan.shape
@@ -100,13 +99,13 @@ def validation_round(model, ds, *, epoch=0, args):
     total_time = time.time() - args.start_time
     mean_time = total_time / max(1, epoch)
     print(f"Mean time: {mean_time:.0f}s per training epoch.")
-    mean_score = sum(item["value"] for item in scores) / len(scores)
+    mean_iou = sum(item["value"] for item in scores) / len(scores)
     report.append({
         "mean_time": mean_time,
         "samples": samples,
-        "score_over_epochs": mean_score / max(1, epoch),
-        "score_over_time": mean_score / total_time,
-        "validation_score": mean_score,
+        "score_over_epochs": 1 / (1-mean_iou) / max(1, epoch),
+        "score_over_time": 1 / (1-mean_iou) / total_time,
+        "validation_score": mean_iou,
     }, commit=False)
 
 
@@ -123,9 +122,26 @@ def train(model, losses, tds, vds, args):
     for epoch in range(args.epochs):
         train_epoch(model, losses, ds=tds, epoch=epoch, optimizer=optimizer, args=args)
         if (epoch + 1) % 20 == 0:
-            validation_round(model, vds, epoch=epoch+1, args=args)
+            validation_round(model, vds, epoch=epoch + 1, args=args)
             model.save()
-    report.append({"mean_time": (time.time() - args.start_time)/args.epochs})
+    report.append({"mean_time": (time.time() - args.start_time) / args.epochs})
+    if args.debug:
+        print(
+            f"Save to {args.models_path / f'{args.id}.pth'}",
+            dict(
+                state_dict=model.stream.state_dict(),
+                repr_dict=model.stream.repr_dict
+            )
+        )
+    else:
+        pass
+        # torch.save(
+        #     dict(
+        #         state_dict=model.stream.state_dict(),
+        #         repr_dict=model.stream.repr_dict
+        #     ),
+        #     args.models_path / f"{args.id}.pth"
+        # )
 # def train(model: models.Pipeline, train_dataset, valid_dataset, args):
 #     epoch = 0
 #     next_key = 0

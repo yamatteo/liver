@@ -4,8 +4,8 @@ import torch
 from torch import Tensor
 from torch import nn
 
-from . import wrap
-from .monostream import Stream
+from .utils import wrap
+from .streams import Stream
 
 
 class Structure(nn.Module):
@@ -24,7 +24,7 @@ class Structure(nn.Module):
         }
         self.mod = None
         self.mods = []
-        self.repr = f"{name}({repr_args}{', ' if args and kwargs else ''}{repr_kwargs})"
+        self.repr = f"{name}({repr_args}{', ' if repr_args and repr_kwargs else ''}{repr_kwargs})"
         self.repr_dict = dict(
             name=name,
             args=rd_args,

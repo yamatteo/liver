@@ -9,6 +9,7 @@ import torch
 import rich
 from adabelief_pytorch import AdaBelief
 from rich import print
+from torch.nn import *
 
 import dataset
 import nibabelio
@@ -41,29 +42,36 @@ if __name__ == '__main__':
 
     model = Wrapper(
         Sequential(
-            Stream("as_tensor", dtype=torch.float32),
+            Stream(AsTensor, dtype=torch.float32),
             SkipCat(
                 Sequential(
-                    Stream("AvgPool3d", kernel_size=(2, 2, 1)),
+                    Stream(AvgPool3d, kernel_size=(2, 2, 1)),
                     ConvBlock([4, 16, 16], actv="ELU", norm="InstanceNorm3d"),
                     SkipCat(
                         Sequential(
-                            Stream("MaxPool3d", kernel_size=(2, 2, 1)),
+                            Stream(MaxPool3d, kernel_size=(2, 2, 1)),
                             ConvBlock([16, 32, 32], actv="ELU", norm="InstanceNorm3d"),
-                            ConvBlock([32, 16, 16], actv="ELU", norm="InstanceNorm3d", drop="Dropout3d"),
-                            Stream("Upsample", scale_factor=(2, 2, 1), mode='nearest')
+                            SkipCat(
+                                Sequential(
+                                    Stream(MaxPool3d, kernel_size=(2, 2, 2)),
+                                    ConvBlock([32, 64, 64], actv="ELU", norm="InstanceNorm3d"),
+
+                                    ConvBlock([64, 32, 32], actv="ELU", norm="InstanceNorm3d", drop="Dropout3d"),
+                                    Stream(Upsample, scale_factor=(2, 2, 2), mode='nearest')
+                                ),
+                                dim=1,
+                            ),
+                            ConvBlock([64, 32, 16], actv="ELU", norm="InstanceNorm3d", drop="Dropout3d"),
+                            Stream(Upsample, scale_factor=(2, 2, 1), mode='nearest')
                         ),
                         dim=1,
                     ),
                     ConvBlock([32, 16, 12], actv="ELU", norm="InstanceNorm3d", drop="Dropout3d"),
-                    Stream("Upsample", scale_factor=(2, 2, 1), mode='trilinear')
+                    Stream(Upsample, scale_factor=(2, 2, 1), mode='trilinear')
                 ),
                 dim=1,
             ),
-            SkipCat(
-                ConvBlock([16, 16, 16, 16], actv="ELU", norm="InstanceNorm3d", drop="Dropout3d")
-            ),
-            ConvBlock([32, 16, 8, 4, 2], kernel_size=(1, 1, 1), actv="ReLU"),
+            ConvBlock([16, 16, 16, 2], kernel_size=(1, 1, 1), actv="ReLU"),
         ),
         inputs=["scan"],
         outputs=["pred"],

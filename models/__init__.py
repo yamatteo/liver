@@ -1,17 +1,5 @@
-from types import GeneratorType
-
-from torch import Tensor
-
-
-def wrap(*args) -> tuple[Tensor, ...]:
-    if args == ():
-        return ()
-    first, *rest = args
-    if isinstance(first, (tuple, list, GeneratorType)):
-        return *wrap(*first), *wrap(*rest)
-    return first, *wrap(*rest)
-
-
-from .convolutions import ConvBlock
-from .monostream import Stream
+from .utils import wrap
+from .custom_modules import Argmax, AsTensor, Clamp, FoldNorm3d, Recall
+from .streams import Stream
 from .structures import Cat, Select, Separated, Sequential, SkipCat, Split, Wrapper
+from .convolutions import ConvBlock

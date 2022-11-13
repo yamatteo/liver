@@ -1,8 +1,9 @@
 from torch import nn, Tensor
+from torch.nn import Conv3d
 
-from . import wrap
+from .utils import wrap
+from .streams import Stream
 from .structures import Sequential
-from .monostream import Stream
 
 
 # class Conv(AbstractStream):
@@ -89,7 +90,7 @@ from .monostream import Stream
 #         return Stream("Conv3d", **kwargs),
 
 
-class ConvBlock(Stream):
+class ConvBlock(nn.Module):
     def __init__(
             self,
             channels: list[int],
@@ -101,7 +102,7 @@ class ConvBlock(Stream):
             drop: str = None,
             momentum: float = 0.9,
     ):
-        super(ConvBlock, self).__init__(None)
+        super(ConvBlock, self).__init__()
         kwargs = dict(
             kernel_size=kernel_size,
             stride=stride,
@@ -109,7 +110,7 @@ class ConvBlock(Stream):
             padding_mode="reflect",
         )
         layers: list[nn.Module] = [
-            Stream("Conv3d", channels[0], channels[1], **kwargs)
+            Stream(Conv3d, channels[0], channels[1], **kwargs)
         ]
         kwargs["stride"] = (1, 1, 1)
         for i in range(1, len(channels) - 1):

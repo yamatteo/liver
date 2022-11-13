@@ -27,6 +27,15 @@ class AsTensor(nn.Module):
         return torch.as_tensor(input, **self.kwargs).unsqueeze(0)
 
 
+class Cat(nn.Module):
+    def __init__(self, dim=1):
+        super(Cat, self).__init__()
+        self.dim = dim
+
+    def forward(self, *args):
+        return torch.cat(args, dim=self.dim)
+
+
 class Clamp(nn.Module):
     def __init__(self, min, max):
         super(Clamp, self).__init__()

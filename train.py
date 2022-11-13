@@ -134,14 +134,13 @@ def train(model, losses, tds, vds, args):
             )
         )
     else:
-        pass
-        # torch.save(
-        #     dict(
-        #         state_dict=model.stream.state_dict(),
-        #         repr_dict=model.stream.repr_dict
-        #     ),
-        #     args.models_path / f"{args.id}.pth"
-        # )
+        torch.save(
+            dict(
+                state_dict=model.stream.state_dict(),
+                repr_dict=model.stream.repr_dict
+            ),
+            args.models_path / f"{args.id}.pth"
+        )
 # def train(model: models.Pipeline, train_dataset, valid_dataset, args):
 #     epoch = 0
 #     next_key = 0

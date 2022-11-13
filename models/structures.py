@@ -8,23 +8,35 @@ from .utils import wrap
 from .streams import Stream
 
 
-class Structure(nn.Module):
-    def __init__(self, name, *args, **kwargs):
-        super(Structure, self).__init__()
-        repr_args = str(", ").join([str(a) for a in args if not isinstance(a, (Structure, Stream))])
+class Structure(nn.ModuleList):
+    def __init__(self, *args: nn.Module, custom_repr=None, **kwargs):
+        super(Structure, self).__init__(args)
+
+        name = type(self).__name__
         repr_kwargs = str(", ").join([
             k + '=' + str(a)
             for k, a in kwargs.items()
             if not isinstance(a, (Structure, Stream))
         ])
-        rd_args = tuple(arg.repr_dict if isinstance(arg, (Structure, Stream)) else arg for arg in args)
+        repr_head = f"{name}{'('+repr_kwargs+')' if repr_kwargs or len(self)==0 else ''}"
+        if custom_repr:
+            self.custom_repr = custom_repr
+        else:
+            content = str("\n").join([repr(mod) for mod in self])
+            self.custom_repr = str("\n  ").join([
+                repr_head + (":" if len(self) > 0 else ""),
+                *content.splitlines(),
+                ])
+        if len(self) == 0:
+            self.summary = repr_head
+        else:
+            self.summary = {repr_head: [repr(mod) if isinstance(mod, Stream) else mod.summary for mod in self]}
+
+        rd_args = tuple(arg.repr_dict for arg in args)
         rd_kwargs = {
             key: value.repr_dict if isinstance(value, (Structure, Stream)) else value
             for key, value in kwargs.items()
         }
-        self.mod = None
-        self.mods = []
-        self.repr = f"{name}({repr_args}{', ' if repr_args and repr_kwargs else ''}{repr_kwargs})"
         self.repr_dict = dict(
             name=name,
             args=rd_args,
@@ -32,69 +44,45 @@ class Structure(nn.Module):
         )
 
     def __repr__(self):
-        modules = [self.mod] if self.mod is not None else self.mods
-        content = str("\n").join([repr(mod) for mod in modules])
-        return str("\n    ").join([
-            self.repr + (":" if modules else ""),
-            *content.splitlines(),
-        ])
+        return self.custom_repr
 
 
-class Cat(Structure):
-    def __init__(self, dim=1):
-        super(Cat, self).__init__("Cat", dim=dim)
-        self.dim = dim
-
-    def forward(self, *args):
-        return torch.cat(args, dim=self.dim),
-
-
-class Select(Structure):
-    def __init__(self, indexes: list[int]):
-        super(Select, self).__init__("Select", indexes)
-        self.indexes = indexes
-
-    def forward(self, *args):
-        return wrap(args[i] for i in self.indexes)
-
-
-class SkipCat(Structure):
-    def __init__(self, module: Union[Stream, Structure], dim=1):
-        super(SkipCat, self).__init__("SkipCat", module, dim=dim)
-        self.mod = module
-        self.dim = dim
-
-    def forward(self, *args):
-        return wrap(torch.cat([x, *self.mod(x)], dim=self.dim) for x in args)
-
-
-class Separated(Structure):
-    def __init__(self, *modules: Union[Stream, Structure]):
-        super(Separated, self).__init__("Separated", *modules)
-        self.mods = nn.ModuleList(modules)
+class Parallel(Structure):
+    def __init__(self, *modules: Union[Stream, Structure], custom_repr=None):
+        super(Parallel, self).__init__(*modules, custom_repr=custom_repr)
 
     def forward(self, *args) -> tuple[Tensor, ...]:
-        return wrap(module(arg) for module, arg in zip(self.mods, args))
+        return wrap(module(arg) for module, arg in zip(self, args, strict=True))
 
 
-class Split(Structure):
-    def __init__(self, *modules: Union[Stream, Structure]):
-        super(Split, self).__init__("Split", *modules)
-        self.mods = nn.ModuleList(modules)
+class Separate(Structure):
+    def __init__(self, *modules: Union[Stream, Structure], custom_repr=None):
+        super(Separate, self).__init__(*modules, custom_repr=custom_repr)
 
     def forward(self, *args) -> tuple[Tensor, ...]:
-        return wrap(module(*args) for module in self.mods)
+        return wrap(module(*args) for module in self)
 
 
 class Sequential(Structure):
-    def __init__(self, *modules: Union[Stream, Structure]):
-        super(Sequential, self).__init__("Sequential", *modules)
-        self.mods = nn.ModuleList(modules)
+    def __init__(self, *modules: Union[Stream, Structure], custom_repr=None):
+        super(Sequential, self).__init__(*modules, custom_repr=custom_repr)
 
     def forward(self, *args) -> tuple[Tensor, ...]:
-        for module in self.mods:
+        for module in self:
             args = wrap(module(*args))
         return args
+
+
+class SkipConnection(Structure):
+    def __init__(self, *modules: Union[Stream, Structure], dim=1, custom_repr=None):
+        super(SkipConnection, self).__init__(*modules, custom_repr=custom_repr)
+        self.dim = dim
+
+    def forward(self, *args) -> tuple[Tensor, ...]:
+        orig, = args
+        for module in self:
+            args = wrap(module(*args))
+        return wrap(torch.cat([orig, *args], dim=self.dim))
 
 
 class Wrapper(nn.Module):

@@ -44,32 +44,27 @@ if __name__ == '__main__':
     model = Wrapper(
         Sequential(
             Stream(AsTensor, dtype=torch.float32),
-            SkipCat(
-                Sequential(
-                    Stream(AvgPool3d, kernel_size=(2, 2, 1)),
-                    ConvBlock([4, 16, 16], actv="ELU", norm="InstanceNorm3d"),
-                    SkipCat(
-                        Sequential(
-                            Stream(MaxPool3d, kernel_size=(2, 2, 1)),
-                            ConvBlock([16, 32, 32], actv="ELU", norm="InstanceNorm3d"),
-                            SkipCat(
-                                Sequential(
-                                    Stream(MaxPool3d, kernel_size=(2, 2, 2)),
-                                    ConvBlock([32, 64, 64], actv="ELU", norm="InstanceNorm3d"),
-
-                                    ConvBlock([64, 32, 32], actv="ELU", norm="InstanceNorm3d", drop="Dropout3d"),
-                                    Stream(Upsample, scale_factor=(2, 2, 2), mode='nearest')
-                                ),
-                                dim=1,
-                            ),
-                            ConvBlock([64, 32, 16], actv="ELU", norm="InstanceNorm3d", drop="Dropout3d"),
-                            Stream(Upsample, scale_factor=(2, 2, 1), mode='nearest')
-                        ),
+            SkipConnection(
+                Stream(AvgPool3d, kernel_size=(2, 2, 1)),
+                ConvBlock([4, 16, 16], actv="ELU"),
+                Stream(FoldNorm3d, (16, 16, 8), num_features=16, momentum=0.9),
+                SkipConnection(
+                    Stream(MaxPool3d, kernel_size=(2, 2, 1)),
+                    ConvBlock([16, 32, 32], actv="ELU"),
+                    Stream(FoldNorm3d, (8, 8, 8), num_features=32, momentum=0.9),
+                    SkipConnection(
+                        Stream(MaxPool3d, kernel_size=(2, 2, 2)),
+                        ConvBlock([32, 64, 64], actv="ELU", norm="InstanceNorm3d"),
+                        ConvBlock([64, 32, 32], actv="ELU", norm="InstanceNorm3d", drop="Dropout3d"),
+                        Stream(Upsample, scale_factor=(2, 2, 2), mode='nearest'),
                         dim=1,
                     ),
-                    ConvBlock([32, 16, 12], actv="ELU", norm="InstanceNorm3d", drop="Dropout3d"),
-                    Stream(Upsample, scale_factor=(2, 2, 1), mode='trilinear')
+                    ConvBlock([64, 32, 16], actv="ELU", norm="InstanceNorm3d", drop="Dropout3d"),
+                    Stream(Upsample, scale_factor=(2, 2, 1), mode='nearest'),
+                    dim=1,
                 ),
+                ConvBlock([32, 16, 12], actv="ELU", norm="InstanceNorm3d", drop="Dropout3d"),
+                Stream(Upsample, scale_factor=(2, 2, 1), mode='trilinear'),
                 dim=1,
             ),
             ConvBlock([16, 16, 16, 2], kernel_size=(1, 1, 1), actv="ReLU"),
@@ -82,11 +77,11 @@ if __name__ == '__main__':
 
     losses = Wrapper(
         Sequential(
-            Separated(
+            Parallel(
                 Stream("Identity"),
                 Stream("Clamp", 0, 1),
             ),
-            Split(
+            Separate(
                 Stream("CrossEntropyLoss"),
                 Stream("Recall", argmax_input_dim=1),
             ),
@@ -100,7 +95,8 @@ if __name__ == '__main__':
     losses.to_device()
 
     print("Using model:", repr(model))
-    args.arch = model.stream.repr_dict
+    args.arch = model.stream.summary
+    print(f"Run with options: {vars(args)}")
 
     train_cases, valid_cases = px.split_trainables(args.sources_path)
     train_cases = random.sample(train_cases, len(train_cases))

@@ -129,7 +129,7 @@ def train(model, losses, tds, vds, args):
             validation_round(model, vds, epoch=epoch + 1, args=args)
             model.save()
             tds.buffer_size += args.buffer_increment
-            args.grad_accumulation_steps = tds.buffer_size // 4
+            args.grad_accumulation_steps = (tds.buffer_size+3) // 4
     report.append({"mean_time": (time.time() - args.start_time) / args.epochs})
     if args.debug:
         print(

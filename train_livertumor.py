@@ -24,10 +24,11 @@ rich.reconfigure(width=180)
 if __name__ == '__main__':
     args = SimpleNamespace(
         batch_size=1,
-        buffer_size=5 if debug else 40,
+        buffer_increment=5 if debug else 4,
+        buffer_size=10 if debug else 40,
         debug=debug,
         device=torch.device("cpu") if debug else torch.device("cuda:0"),
-        epochs=20 if debug else 200,
+        epochs=40 if debug else 200,
         grad_accumulation_steps=10,
         finals=2,
         id=f"LiverTumor{int(time.time()) // 120:06X}",
@@ -37,7 +38,7 @@ if __name__ == '__main__':
         norm_momentum=0.9,
         slice_shape=(32, 32, 8) if debug else (512, 512, 32),
         sources_path=Path('/gpfswork/rech/otc/uiu95bi/sources'),
-        staging_size=1,
+        turnover_ratio=0.1,
     )
     print(f"Run with options: {vars(args)}")
 
@@ -54,16 +55,22 @@ if __name__ == '__main__':
                     Stream(FoldNorm3d, (8, 8, 8), num_features=32, momentum=0.9),
                     SkipConnection(
                         Stream(MaxPool3d, kernel_size=(2, 2, 2)),
-                        ConvBlock([32, 64, 64], actv="ELU", norm="InstanceNorm3d"),
-                        ConvBlock([64, 32, 32], actv="ELU", norm="InstanceNorm3d", drop="Dropout3d"),
+                        ConvBlock([32, 64, 64], actv="ELU"),
+                        Stream(FoldNorm3d, (4, 4, 4), num_features=64, momentum=0.9),
+                        ConvBlock([64, 32, 32], actv="ELU"),
+                        Stream(FoldNorm3d, (4, 4, 4), num_features=32, momentum=0.9),
                         Stream(Upsample, scale_factor=(2, 2, 2), mode='nearest'),
                         dim=1,
                     ),
-                    ConvBlock([64, 32, 16], actv="ELU", norm="InstanceNorm3d", drop="Dropout3d"),
+                    ConvBlock([64, 32, 16], actv="ELU"),
+                    Stream(FoldNorm3d, (8, 8, 8), num_features=16, momentum=0.9),
+                    Stream(Dropout3d),
                     Stream(Upsample, scale_factor=(2, 2, 1), mode='nearest'),
                     dim=1,
                 ),
-                ConvBlock([32, 16, 12], actv="ELU", norm="InstanceNorm3d", drop="Dropout3d"),
+                ConvBlock([32, 16, 12], actv="ELU"),
+                Stream(FoldNorm3d, (16, 16, 8), num_features=12, momentum=0.9),
+                Stream(Dropout3d),
                 Stream(Upsample, scale_factor=(2, 2, 1), mode='trilinear'),
                 dim=1,
             ),
@@ -96,7 +103,6 @@ if __name__ == '__main__':
 
     print("Using model:", repr(model))
     args.arch = model.stream.summary
-    print(f"Run with options: {vars(args)}")
 
     train_cases, valid_cases = px.split_trainables(args.sources_path)
     train_cases = random.sample(train_cases, len(train_cases))
@@ -105,7 +111,7 @@ if __name__ == '__main__':
     train_dataset = dataset.GeneratorDataset(
         dataset.debug_slice_gen(None, args.slice_shape) if debug else dataset.train_slice_gen(queue, args),
         buffer_size=args.buffer_size,
-        staging_size=args.staging_size
+        turnover_ratio=args.turnover_ratio,
     )
 
     if debug:
@@ -114,7 +120,7 @@ if __name__ == '__main__':
         valid_dataset = dataset.GeneratorDataset(
             dataset.debug_slice_gen(None, shape),
             buffer_size=5,
-            staging_size=1
+            turnover_size=1
         )
     else:
         valid_dataset = dataset.GeneratorDataset(

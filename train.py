@@ -39,6 +39,7 @@ def train_epoch(model, losses, ds, epoch, optimizer, args):
     round_scores = dict()
     round_recall = 0
     round_cross = 0
+    optimizer.zero_grad()
     assert args.batch_size == 1
     dl = DataLoader(ds, batch_size=args.batch_size)
     for data in dl:
@@ -51,6 +52,7 @@ def train_epoch(model, losses, ds, epoch, optimizer, args):
         round_cross += data["cross"].item()
         round_recall += data["recall"].item()
         if (key + 1) % args.grad_accumulation_steps == 0 or key + 1 == len(ds):
+            print(f"Optimizer step at key = {key+1}")
             optimizer.step()
             optimizer.zero_grad()
     ds.drop(round_scores)
@@ -120,10 +122,14 @@ def train(model, losses, tds, vds, args):
         print_change_log=False,
     )
     for epoch in range(args.epochs):
+        model.stream.train()
         train_epoch(model, losses, ds=tds, epoch=epoch, optimizer=optimizer, args=args)
         if (epoch + 1) % 20 == 0:
+            model.stream.eval()
             validation_round(model, vds, epoch=epoch + 1, args=args)
             model.save()
+            tds.buffer_size += args.buffer_increment
+            args.grad_accumulation_steps = tds.buffer_size // 4
     report.append({"mean_time": (time.time() - args.start_time) / args.epochs})
     if args.debug:
         print(

@@ -11,25 +11,26 @@ import numpy as np
 import torch.utils.data
 from rich import print
 
-# import idr_torch as idr
 import nibabelio
 from slicing import slices
 
-
 debug = Path(".env").exists()
 
+
 class GeneratorDataset(torch.utils.data.Dataset):
-    def __init__(self, generator: Iterator[dict], *, buffer_size: int = None, staging_size: int = None, post_func=None):
+    def __init__(self, generator: Iterator[dict], *, buffer_size: int = None, force: bool = True, turnover_size: int = None,
+                 turnover_ratio: float = None, post_func=None):
         super(GeneratorDataset, self).__init__()
         self.generator = generator
+        self.force = force
+        self.turnover_size = turnover_size
+        self.turnover_ratio = turnover_ratio
         if buffer_size is None:
             self.buffer = list(generator)
             self.buffer_size = len(self.buffer)
-            self.staging_size = None
         else:
             self.buffer = []
             self.buffer_size = buffer_size
-            self.staging_size = staging_size
             self.fill()
         self.post_func = post_func
 
@@ -41,6 +42,19 @@ class GeneratorDataset(torch.utils.data.Dataset):
             return {"keys": i, **self.post_func(**self.buffer[i])}
         return {"keys": i, **self.buffer[i]}
 
+    @property
+    def turnover(self):
+        if self.turnover_size is not None:
+            size = self.turnover_size
+        elif self.turnover_ratio is not None:
+            size = max(1, int(self.buffer_size * self.turnover_ratio))
+        else:
+            size = 0
+        if self.force:
+            return 1, max(0, size-1)
+        else:
+            return 0, size
+
     def fill(self, size=None):
         size = size or self.buffer_size
         for _ in range(size):
@@ -49,14 +63,12 @@ class GeneratorDataset(torch.utils.data.Dataset):
             self.buffer.append(next(self.generator))
 
     def drop(self, scores: dict[int, float]):
-        smallest = heapq.nsmallest(
-            len(self.buffer) - self.buffer_size + self.staging_size,
-            list(scores.keys()),
-            lambda i: scores[i]
-        )
-        if 0 not in smallest:
-            smallest.append(0)
+        num_oldest, num_smallest = self.turnover
+        num_excess = max(0, len(self.buffer) - self.buffer_size)
+        smallest = heapq.nsmallest(num_excess + num_smallest, list(scores.keys()), lambda i: scores[i])
+        smallest = {*smallest, *range(num_oldest)}
         smallest = reversed(sorted(smallest))
+        print(f"Dropping {list(smallest)}")
         for k in smallest:
             del self.buffer[k]
         self.fill()
@@ -149,7 +161,7 @@ def queue_generator(case_list: list[Path], length=2):
 
 def train_slice_gen(queue, args):
     shape = args.slice_shape
-    stride = (shape[0], shape[1], shape[2]//2)
+    stride = (shape[0], shape[1], shape[2] // 2)
     for bundle_dict in queue:
         for scan, segm in slices(bundle_dict["scan"], bundle_dict["segm"], shape=args.slice_shape, stride=stride):
             yield dict(

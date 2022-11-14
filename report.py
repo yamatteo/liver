@@ -41,7 +41,7 @@ def sample(scan: np.ndarray, pred: np.ndarray, segm: np.ndarray):
     white = np.clip(scan[n, 2, :, :, z], 0, 255)
     red = white + 60 * (pred[n, :, :, z] == 1)
     green = white + 60 * (pred[n, :, :, z] == 2)
-    blue = white
+    blue = white + 60 * (segm[n, :, :, z] > 0)
     img = np.clip(np.stack([red, green, blue], axis=-1), 0, 255)
 
     return wandb.Image(img)

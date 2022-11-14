@@ -127,7 +127,7 @@ def train(model, losses, tds, vds, args):
         train_epoch(model, losses, ds=tds, epoch=epoch, optimizer=optimizer, args=args)
         if (epoch + 1) % 20 == 0:
             model.stream.eval()
-            validation_round(model, vds, epoch=epoch + 1, args=args)
+            validation_round(model, losses, ds=vds, epoch=epoch + 1, args=args)
             model.save()
             tds.buffer_size += args.buffer_increment
             args.grad_accumulation_steps = (tds.buffer_size+3) // 4

@@ -46,7 +46,7 @@ def train_epoch(model, losses, ds, epoch, optimizer, args):
         key = int(data["keys"][0])
         model(data)
         losses(data)
-        loss = (data["cross"] + (1 - data["recall"])) / args.grad_accumulation_steps
+        loss = (data["cross"] + 2*(1 - data["recall"])) / args.grad_accumulation_steps
         loss.backward()
         round_scores.update({key: loss.item()})
         round_cross += data["cross"].item()
@@ -63,11 +63,11 @@ def train_epoch(model, losses, ds, epoch, optimizer, args):
         f"Cross: {round_cross / len(ds):.3f}. "
         f"Recall: {round_recall / len(ds):.2f}."
     )
-    report.append({f"loss": mean_loss})
+    report.append({f"loss": mean_loss, "recall": round_recall / len(ds)})
 
 
 @torch.no_grad()
-def validation_round(model, ds, *, epoch=0, args):
+def validation_round(model, losses, ds, *, epoch=0, args):
     # first_device, last_device = streams[0].device, streams[-1].device
     scores = []
     samples = []
@@ -80,11 +80,13 @@ def validation_round(model, ds, *, epoch=0, args):
         for (x, t) in slices(scan, segm, shape=args.slice_shape, pad_up_to=1):
             items = model({"scan": x})
             pred.append(items["pred"])
-        pred = torch.argmax(torch.cat(pred, dim=-1)[..., :scan.shape[-1]], dim=1)
+        pred = torch.cat(pred, dim=-1)[..., :scan.shape[-1]]
         segm = torch.as_tensor(segm, device=pred.device).clamp(0, 1)
+        recall = losses(dict(pred=pred, segm=segm)).get("recall").item()
+        pred = torch.argmax(pred, dim=1)
         intersection = torch.sum(pred * segm).item() + 0.1
         union = torch.sum(torch.clamp(pred + segm, 0, 1)).item() + 0.1
-        scores.append({"name": name, "value": intersection / union})
+        scores.append({"name": name, "value": intersection / union, "recall": recall})
         for _ in range(4):
             samples.append(report.sample(
                 scan.cpu().numpy(),
@@ -97,17 +99,16 @@ def validation_round(model, ds, *, epoch=0, args):
     for score in scores:
         name = score["name"]
         value = score["value"]
-        print(f"{name:>12}:{100 * value:6.1f}% iou")
+        print(f"{name:>12}:{100 * value:6.1f}% iou --- {100 * score['recall']:6.1f}% rcll")
     total_time = time.time() - args.start_time
     mean_time = total_time / max(1, epoch)
     print(f"Mean time: {mean_time:.0f}s per training epoch.")
     mean_iou = sum(item["value"] for item in scores) / len(scores)
+    mean_recall = sum(item["recall"] for item in scores) / len(scores)
     report.append({
-        "mean_time": mean_time,
         "samples": samples,
-        "score_over_epochs": 1 / (1-mean_iou) / max(1, epoch),
-        "score_over_time": 1 / (1-mean_iou) / total_time,
         "validation_score": mean_iou,
+        "validation_recall": mean_recall,
     }, commit=False)
 
 

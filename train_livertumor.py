@@ -58,19 +58,19 @@ if __name__ == '__main__':
                         ConvBlock([32, 64, 64], actv="ELU"),
                         Stream(FoldNorm3d, (4, 4, 4), num_features=64, momentum=0.9),
                         ConvBlock([64, 32, 32], actv="ELU"),
-                        # Stream(FoldNorm3d, (4, 4, 4), num_features=32, momentum=0.9),
+                        Stream(FoldNorm3d, (4, 4, 4), num_features=32, momentum=0.9),
                         Stream(Dropout3d),
                         Stream(Upsample, scale_factor=(2, 2, 2), mode='nearest'),
                         dim=1,
                     ),
                     ConvBlock([64, 32, 16], actv="ELU"),
-                    # Stream(FoldNorm3d, (8, 8, 8), num_features=16, momentum=0.9),
+                    Stream(FoldNorm3d, (8, 8, 8), num_features=16, momentum=0.9),
                     Stream(Dropout3d),
                     Stream(Upsample, scale_factor=(2, 2, 1), mode='nearest'),
                     dim=1,
                 ),
                 ConvBlock([32, 16, 12], actv="ELU"),
-                # Stream(FoldNorm3d, (16, 16, 8), num_features=12, momentum=0.9),
+                Stream(FoldNorm3d, (16, 16, 8), num_features=12, momentum=0.9),
                 Stream(Dropout3d),
                 Stream(Upsample, scale_factor=(2, 2, 1), mode='trilinear'),
                 dim=1,
@@ -149,7 +149,7 @@ if __name__ == '__main__':
             rectify=False,
             print_change_log=False,
         )
-        validation_round(model, ds=valid_dataset, args=args)
+        validation_round(model, losses, ds=valid_dataset, args=args)
         train(model, losses, tds=train_dataset, vds=valid_dataset, args=args)
         # train(ddp_model, train_dataset, train_loader, gpu, args)
         # train(model=model, train_dataset=train_dataset, valid_dataset=valid_dataset, args=args)

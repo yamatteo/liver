@@ -24,8 +24,8 @@ rich.reconfigure(width=180)
 if __name__ == '__main__':
     args = SimpleNamespace(
         batch_size=1,
-        buffer_increment=5 if debug else 4,
-        buffer_size=10 if debug else 40,
+        buffer_increment=5 if debug else 2,
+        buffer_size=40 if debug else 40,
         debug=debug,
         device=torch.device("cpu") if debug else torch.device("cuda:0"),
         epochs=40 if debug else 200,
@@ -38,7 +38,7 @@ if __name__ == '__main__':
         norm_momentum=0.9,
         slice_shape=(32, 32, 8) if debug else (512, 512, 32),
         sources_path=Path('/gpfswork/rech/otc/uiu95bi/sources'),
-        turnover_ratio=0.1,
+        turnover_ratio=0.05,
     )
     print(f"Run with options: {vars(args)}")
 

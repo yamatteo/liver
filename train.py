@@ -52,7 +52,7 @@ def train_epoch(model, losses, ds, epoch, optimizer, args):
         round_cross += data["cross"].item()
         round_recall += data["recall"].item()
         if (key + 1) % args.grad_accumulation_steps == 0 or key + 1 == len(ds):
-            print(f"Optimizer step at key = {key+1}")
+            # print(f"Optimizer step at key = {key+1}")
             optimizer.step()
             optimizer.zero_grad()
     ds.drop(round_scores)

@@ -67,10 +67,16 @@ class GeneratorDataset(torch.utils.data.Dataset):
         num_excess = max(0, len(self.buffer) - self.buffer_size)
         smallest = heapq.nsmallest(num_excess + num_smallest, list(scores.keys()), lambda i: scores[i])
         smallest = {*smallest, *range(num_oldest)}
-        smallest = reversed(sorted(smallest))
-        print(f"Dropping {list(smallest)}")
+        smallest = list(reversed(sorted(smallest)))
+        print(f"Dropping", end="")
         for k in smallest:
+            try:
+                print(f"{comma} {k}", end="")
+            except NameError:
+                print(f": {k}", end="")
+                comma = ","
             del self.buffer[k]
+        print(".")
         self.fill()
 
     def warmup(self, size, evaluator):

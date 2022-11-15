@@ -53,7 +53,7 @@ def samples(scan: np.ndarray, pred: np.ndarray, segm: np.ndarray, *, num=4):
         return [[]]
     step = scan.shape[-1] // (num+2)
     samples = []
-    for n in scan.shape[0]:
+    for n in range(scan.shape[0]):
         n_samples = []
         for zi in range(num):
             z = step + step*zi

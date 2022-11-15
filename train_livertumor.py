@@ -48,11 +48,11 @@ if __name__ == '__main__':
             SkipConnection(
                 Stream(AvgPool3d, kernel_size=(2, 2, 1)),
                 ConvBlock([4, 32, 32], actv="ELU"),
-                Stream(FoldNorm3d, (16, 16, 8), num_features=16, momentum=0.9),
+                Stream(FoldNorm3d, (16, 16, 8), num_features=32, momentum=0.9),
                 SkipConnection(
                     Stream(MaxPool3d, kernel_size=(2, 2, 1)),
                     ConvBlock([32, 64, 64], actv="ELU"),
-                    Stream(FoldNorm3d, (8, 8, 8), num_features=32, momentum=0.9),
+                    Stream(FoldNorm3d, (8, 8, 8), num_features=64, momentum=0.9),
                     SkipConnection(
                         Stream(MaxPool3d, kernel_size=(2, 2, 2)),
                         ConvBlock([64, 128, 128], actv="ELU", norm="InstanceNorm3d"),

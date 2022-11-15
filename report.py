@@ -46,6 +46,28 @@ def sample(scan: np.ndarray, pred: np.ndarray, segm: np.ndarray):
 
     return wandb.Image(img)
 
+
+def samples(scan: np.ndarray, pred: np.ndarray, segm: np.ndarray, *, num=4):
+    # scan.shape is [N, C, X, Y, Z], segm and pred are [N, X, Y, Z]
+    if muted:
+        return [[]]
+    step = scan.shape[-1] // (num+2)
+    samples = []
+    for n in scan.shape[0]:
+        n_samples = []
+        for zi in range(num):
+            z = step + step*zi
+
+            white = np.clip(scan[n, 2, :, :, z], 0, 255)
+            red = white + 60 * (pred[n, :, :, z] == 1)
+            green = white + 60 * (pred[n, :, :, z] == 2)
+            blue = white + 60 * (segm[n, :, :, z] > 0)
+            img = np.clip(np.stack([red, green, blue], axis=-1), 0, 255)
+            n_samples.append(wandb.Image(img))
+        samples.append(n_samples)
+
+    return samples
+
 # def log_sample(scan: np.ndarray, pred: np.ndarray, segm: np.ndarray):
 #     # scan.shape is [N, C, X, Y, Z], segm and pred are [N, X, Y, Z]
 #     n = random.randint(0, scan.shape[0] - 1)

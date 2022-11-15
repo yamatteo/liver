@@ -70,7 +70,7 @@ def train_epoch(model, losses, ds, epoch, optimizer, args):
 def validation_round(model, losses, ds, *, epoch=0, args):
     # first_device, last_device = streams[0].device, streams[-1].device
     scores = []
-    samples = []
+    samples = {}
     dl = DataLoader(ds)
     for data in dl:
         name = data.get("name", ["no name"])[0]
@@ -87,14 +87,11 @@ def validation_round(model, losses, ds, *, epoch=0, args):
         intersection = torch.sum(pred * segm).item() + 0.1
         union = torch.sum(torch.clamp(pred + segm, 0, 1)).item() + 0.1
         scores.append({"name": name, "value": intersection / union, "recall": recall})
-        for _ in range(4):
-            samples.append(report.sample(
+        samples[f"samples: {name}"] = report.samples(
                 scan.cpu().numpy(),
-                # scans[1].detach().cpu().numpy(),
                 pred.cpu().numpy(),
-                # torch.argmax(preds[1], dim=1).detach().cpu().numpy(),
-                segm.cpu().numpy()
-            ))
+                segm.cpu().numpy(),
+            )[0]
     print("Validation scores are:")
     for score in scores:
         name = score["name"]
@@ -105,11 +102,7 @@ def validation_round(model, losses, ds, *, epoch=0, args):
     print(f"Mean time: {mean_time:.0f}s per training epoch.")
     mean_iou = sum(item["value"] for item in scores) / len(scores)
     mean_recall = sum(item["recall"] for item in scores) / len(scores)
-    report.append({
-        "samples": samples,
-        "validation_score": mean_iou,
-        "validation_recall": mean_recall,
-    }, commit=False)
+    report.append(dict(samples, validation_score=mean_iou, validation_recall=mean_recall), commit=False)
 
 
 def train(model, losses, tds, vds, args):
@@ -131,7 +124,7 @@ def train(model, losses, tds, vds, args):
             model.save()
             tds.buffer_size += args.buffer_increment
             args.grad_accumulation_steps = (tds.buffer_size+3) // 4
-    report.append({"mean_time": (time.time() - args.start_time) / args.epochs})
+    report.append({})
     if args.debug:
         print(
             f"Save to {args.models_path / f'{args.id}.pth'}",

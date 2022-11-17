@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import functools
+import random
 from pathlib import Path
 from typing import Callable, Iterator
 
@@ -133,9 +134,15 @@ def iter_trainable(path: Path) -> Iterator[Path]:
     yield from discover(path, is_trainable)
 
 
-def split_trainables(path: Path, n: int = 10) -> tuple[list[Path], list[Path]]:
+def split_trainables(path: Path, n: int = 10, shuffle=False, offset=0) -> tuple[list[Path], list[Path]]:
     """Lists of case_path for train and valid dataset."""
-    return (
-        list(path / case for k, case in enumerate(iter_trainable(path)) if k % n != 0),
-        list(path / case for k, case in enumerate(iter_trainable(path)) if k % n == 0),
-    )
+    trainables = list(iter_trainable(path))
+    if offset == "random":
+        offset = random.randint(0, min(n-1, len(trainables)))
+    if offset:
+        trainables = [*trainables[offset:], *trainables[:offset]]
+    train_cases = list(path / case for k, case in enumerate(trainables) if k % n != 0)
+    valid_cases = list(path / case for k, case in enumerate(trainables) if k % n == 0)
+    if shuffle:
+        train_cases = random.sample(train_cases, len(train_cases))
+    return train_cases, valid_cases

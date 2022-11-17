@@ -52,11 +52,11 @@ if __name__ == '__main__':
                 SkipConnection(
                     Stream(MaxPool3d, kernel_size=(2, 2, 1)),
                     ConvBlock([32, 64, 64], actv="LeakyReLU"),
-                    Stream(FoldNorm3d, (8, 8, 8), num_features=64, momentum=0.9),
+                    Stream(FoldNorm3d, (16, 16, 8), num_features=64, momentum=0.9),
                     SkipConnection(
                         Stream(MaxPool3d, kernel_size=(2, 2, 2)),
-                        ConvBlock([64, 128, 128], actv="LeakyReLU", norm="InstanceNorm3d"),
-                        # Stream(FoldNorm3d, (4, 4, 4), num_features=64, momentum=0.9),
+                        ConvBlock([64, 128, 128], actv="LeakyReLU"),
+                        Stream(FoldNorm3d, (16, 16, 8), num_features=128, momentum=0.9),
                         ConvBlock([128, 64, 64], actv="LeakyReLU", norm="InstanceNorm3d"),
                         # Stream(FoldNorm3d, (4, 4, 4), num_features=32, momentum=0.9),
                         Stream(Dropout3d),
@@ -105,8 +105,7 @@ if __name__ == '__main__':
     print("Using model:", repr(model))
     args.arch = model.stream.summary
 
-    train_cases, valid_cases = px.split_trainables(args.sources_path)
-    train_cases = random.sample(train_cases, len(train_cases))
+    train_cases, valid_cases = px.split_trainables(args.sources_path, shuffle=True, offset="random")
 
     queue = dataset.queue_generator(list(train_cases), 5)
     train_dataset = dataset.GeneratorDataset(

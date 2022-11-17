@@ -46,7 +46,7 @@ def train_epoch(model, losses, ds, epoch, optimizer, args):
         key = int(data["keys"][0])
         model(data)
         losses(data)
-        loss = (data["cross"] + 2*(1 - data["recall"])) / args.grad_accumulation_steps
+        loss = (data["cross"] + 5*(1 - data["recall"])) / args.grad_accumulation_steps
         loss.backward()
         round_scores.update({key: loss.item()})
         round_cross += data["cross"].item()

@@ -31,6 +31,7 @@ if __name__ == '__main__':
         epochs=40 if debug else 200,
         grad_accumulation_steps=10,
         finals=2,
+        fold_shape=(4, 4, 2) if debug else (16, 16, 8),
         id=f"LiverTumor{int(time.time()) // 120:06X}",
         lr=0.002,
         models_path=Path("../saved_models") if debug else Path('/gpfswork/rech/otc/uiu95bi/saved_models'),
@@ -48,15 +49,15 @@ if __name__ == '__main__':
             SkipConnection(
                 Stream(AvgPool3d, kernel_size=(2, 2, 1)),
                 ConvBlock([4, 32, 32], actv="LeakyReLU"),
-                Stream(FoldNorm3d, (16, 16, 8), num_features=32, momentum=0.9),
+                Stream(FoldNorm3d, args.fold_shape, num_features=32, momentum=0.9),
                 SkipConnection(
                     Stream(MaxPool3d, kernel_size=(2, 2, 1)),
                     ConvBlock([32, 64, 64], actv="LeakyReLU"),
-                    Stream(FoldNorm3d, (16, 16, 8), num_features=64, momentum=0.9),
+                    Stream(FoldNorm3d, args.fold_shape, num_features=64, momentum=0.9),
                     SkipConnection(
                         Stream(MaxPool3d, kernel_size=(2, 2, 2)),
                         ConvBlock([64, 128, 128], actv="LeakyReLU"),
-                        Stream(FoldNorm3d, (16, 16, 8), num_features=128, momentum=0.9),
+                        Stream(FoldNorm3d, args.fold_shape, num_features=128, momentum=0.9),
                         ConvBlock([128, 64, 64], actv="LeakyReLU", norm="InstanceNorm3d"),
                         # Stream(FoldNorm3d, (4, 4, 4), num_features=32, momentum=0.9),
                         Stream(Dropout3d),
@@ -91,7 +92,7 @@ if __name__ == '__main__':
             ),
             Separate(
                 Stream("CrossEntropyLoss"),
-                Stream("Recall", argmax_input_dim=1),
+                Stream(SoftRecall),
             ),
         ),
         inputs=["pred", "segm"],

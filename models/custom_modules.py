@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+from torch.nn import functional
 
 
 class Argmax(nn.Module):
@@ -73,4 +74,26 @@ class Recall(nn.Module):
     def forward(self, input, target):
         if self.argmax_input_dim:
             input = torch.argmax(input, dim=self.argmax_input_dim)
+        return (0.1 + torch.sum(torch.minimum(input, target))) / (0.1 + torch.sum(target))
+
+
+class SoftRecall(nn.Module):
+    def __init__(self, dim=1, klass=1, num_classes=None):
+        super(SoftRecall, self).__init__()
+        self.dim = dim
+        self.klass=klass
+        self.num_classes = num_classes
+
+    def forward(self, input, target):
+        input = functional.softmax(input, dim=self.dim)
+        if self.num_classes:
+            num_classes = self.num_classes
+        else:
+            num_classes = input.size(self.dim)
+        dims = list(range(target.ndim))
+        target = functional.one_hot(target, num_classes).float()
+        dims.insert(self.dim, -1)
+        target = target.permute(dims)
+        input = input[:, self.klass]
+        target = target[:, self.klass]
         return (0.1 + torch.sum(torch.minimum(input, target))) / (0.1 + torch.sum(target))

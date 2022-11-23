@@ -1,4 +1,5 @@
 import tempfile
+import numpy as np
 from functools import partial
 from pathlib import Path
 from tkinter import *
@@ -59,8 +60,11 @@ def load_selected(store, cst, listbox, pool_factor):
         file.resolve().obj.GetContentFile(Path(store.temp_folder.name) / file.name)
     data = nibabelio.load(Path(store.temp_folder.name), scan=True, segm=True, clip=(0, 255))
     scan = avgpool(data["scan"], pool_factor)
-    segm = maxpool(data["segm"], pool_factor)
-    store.height = scan.shape[-1] - 1
+    if data["segm"]:
+        segm = maxpool(data["segm"], pool_factor)
+    else:
+        segm = np.zeros_like(scan[0])
+    store.height = scan.shape[-1]
     store.loaded_scan = SharedNdarray.from_numpy(scan)
     store.loaded_segm = SharedNdarray.from_numpy(segm)
     store.redraw = True

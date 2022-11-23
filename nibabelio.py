@@ -100,7 +100,7 @@ def load_registration_data(case_path: Path) -> tuple[np.ndarray, int, int, int]:
     return d["affine"], d["bottom"], d["top"], d["height"]
 
 
-def load(case_path: Path, scan: bool = True, train: bool = False, clip: tuple[int, int] = None) -> dict:
+def load(case_path: Path, scan: bool = True, segm: bool = False, clip: tuple[int, int] = None) -> dict:
     print(f"Loading {case_path}...")
     name = str(case_path.name)
     _, bottom, top, _ = load_registration_data(case_path)
@@ -116,7 +116,7 @@ def load(case_path: Path, scan: bool = True, train: bool = False, clip: tuple[in
     else:
         scan = None
 
-    if train:
+    if segm:
         segm = load_ndarray(case_path / f"segmentation.nii.gz")
         assert np.all(segm < 3), "segmentation has indices above 2"
         segm = segm[..., bottom:top]

@@ -24,7 +24,7 @@ if __name__=="__main__":
     count, both, liver, tumor = 0, 0, 0, 0
     for case_name in px.iter_trainable(sources):
         _, bottom, top, height = nibabelio.load_registration_data(sources/case_name)
-        data = nibabelio.load(sources/case_name, scan=False, train=True)
+        data = nibabelio.load(sources / case_name, scan=False, segm=True)
         segm = data["segm"]
         pred = nibabelio.load_ndarray(sources / case_name / prediction_name)
         assert pred.shape[-1] == height

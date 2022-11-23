@@ -122,7 +122,7 @@ def deformed(bundle) -> dict:
 
 def put(q, case_path, deform, clip=(-300, 400)):
     # print("Loading", case_path)
-    bundle = nibabelio.load(case_path, train=True, clip=clip)
+    bundle = nibabelio.load(case_path, segm=True, clip=clip)
     if deform:
         print("Applying elastic deformation to", bundle["name"])
         bundle = deformed(bundle)

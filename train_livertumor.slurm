@@ -26,7 +26,7 @@
 
 # /!\ Caution, "multithread" in Slurm vocabulary refers to hyperthreading.
 #SBATCH --hint=nomultithread         # hyperthreading is deactivated
-#SBATCH --time=08:00:00              # maximum execution time requested (HH:MM:SS)
+#SBATCH --time=20:00:00              # maximum execution time requested (HH:MM:SS)
 #SBATCH --output=/gpfswork/rech/otc/uiu95bi/runs/%j.out              # name of output file
 #SBATCH --error=/gpfswork/rech/otc/uiu95bi/runs/%j.out               # name of error file (here, in common with the output file)
 

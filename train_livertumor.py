@@ -45,71 +45,72 @@ if __name__ == '__main__':
     )
     print(f"Run with options: {vars(args)}")
 
-    model = Wrapper(
-        Sequential(
-            Stream(AsTensor, dtype=torch.float32),
-            SkipConnection(
-                Stream(AvgPool3d, kernel_size=(2, 2, 1)),
-                ConvBlock([4, 32, 32], actv="LeakyReLU"),
-                Stream(FoldNorm3d, args.fold_shape, num_features=32, momentum=0.9),
-                SkipConnection(
-                    Stream(MaxPool3d, kernel_size=(2, 2, 1)),
-                    ConvBlock([32, 64, 64], actv="LeakyReLU"),
-                    Stream(FoldNorm3d, args.fold_shape, num_features=64, momentum=0.9),
-                    SkipConnection(
-                        Stream(MaxPool3d, kernel_size=(2, 2, 2)),
-                        ConvBlock([64, 128, 128], actv="LeakyReLU"),
-                        Stream(FoldNorm3d, args.fold_shape, num_features=128, momentum=0.9),
-                        ConvBlock([128, 64, 64], actv="LeakyReLU", norm="InstanceNorm3d"),
-                        # Stream(FoldNorm3d, (4, 4, 4), num_features=32, momentum=0.9),
-                        Stream(Dropout3d),
-                        Stream(Upsample, scale_factor=(2, 2, 2), mode='nearest'),
-                        dim=1,
-                    ),
-                    ConvBlock([128, 64, 32], actv="LeakyReLU", norm="InstanceNorm3d"),
-                    # Stream(FoldNorm3d, (8, 8, 8), num_features=16, momentum=0.9),
-                    Stream(Dropout3d),
-                    Stream(Upsample, scale_factor=(2, 2, 1), mode='nearest'),
-                    dim=1,
-                ),
-                ConvBlock([64, 32, 28], actv="LeakyReLU", norm="InstanceNorm3d"),
-                # Stream(InstanceNorm3d, 12),
-                Stream(Dropout3d),
-                Stream(Upsample, scale_factor=(2, 2, 1), mode='trilinear'),
-                dim=1,
-            ),
-            ConvBlock([32, 16, 16, 2], kernel_size=(1, 1, 1), actv="LeakyReLU"),
-        ),
-        inputs=["scan"],
-        outputs=["pred"],
-        rank=0,
-        storage=args.models_path / "last.pth",
-    )
-
-    losses = Wrapper(
-        Sequential(
-            Parallel(
-                Stream("Identity"),
-                Stream("Clamp", 0, 1),
-            ),
-            Separate(
-                Stream("CrossEntropyLoss"),
-                Stream(SoftRecall),
-            ),
-        ),
-        inputs=["pred", "segm"],
-        outputs=["cross", "recall"],
-        rank=0,
-    )
-
-    model.to_device()
-    losses.to_device()
-
-    print("Using model:", repr(model))
-    args.arch = model.stream.summary
-
     for i in range(args.repetitions):
         args.id = args.group_id + "-" + str(i)
+
+        model = Wrapper(
+            Sequential(
+                Stream(AsTensor, dtype=torch.float32),
+                SkipConnection(
+                    Stream(AvgPool3d, kernel_size=(2, 2, 1)),
+                    ConvBlock([4, 32, 32], actv="LeakyReLU"),
+                    Stream(FoldNorm3d, args.fold_shape, num_features=32, momentum=0.9),
+                    SkipConnection(
+                        Stream(MaxPool3d, kernel_size=(2, 2, 1)),
+                        ConvBlock([32, 64, 64], actv="LeakyReLU"),
+                        Stream(FoldNorm3d, args.fold_shape, num_features=64, momentum=0.9),
+                        SkipConnection(
+                            Stream(MaxPool3d, kernel_size=(2, 2, 2)),
+                            ConvBlock([64, 128, 128], actv="LeakyReLU"),
+                            Stream(FoldNorm3d, args.fold_shape, num_features=128, momentum=0.9),
+                            ConvBlock([128, 64, 64], actv="LeakyReLU", norm="InstanceNorm3d"),
+                            # Stream(FoldNorm3d, (4, 4, 4), num_features=32, momentum=0.9),
+                            Stream(Dropout3d),
+                            Stream(Upsample, scale_factor=(2, 2, 2), mode='nearest'),
+                            dim=1,
+                        ),
+                        ConvBlock([128, 64, 32], actv="LeakyReLU", norm="InstanceNorm3d"),
+                        # Stream(FoldNorm3d, (8, 8, 8), num_features=16, momentum=0.9),
+                        Stream(Dropout3d),
+                        Stream(Upsample, scale_factor=(2, 2, 1), mode='nearest'),
+                        dim=1,
+                    ),
+                    ConvBlock([64, 32, 28], actv="LeakyReLU", norm="InstanceNorm3d"),
+                    # Stream(InstanceNorm3d, 12),
+                    Stream(Dropout3d),
+                    Stream(Upsample, scale_factor=(2, 2, 1), mode='trilinear'),
+                    dim=1,
+                ),
+                ConvBlock([32, 16, 16, 2], kernel_size=(1, 1, 1), actv="LeakyReLU"),
+            ),
+            inputs=["scan"],
+            outputs=["pred"],
+            rank=0,
+            storage=args.models_path / (args.id + ".pth"),
+        )
+
+        losses = Wrapper(
+            Sequential(
+                Parallel(
+                    Stream("Identity"),
+                    Stream("Clamp", 0, 1),
+                ),
+                Separate(
+                    Stream("CrossEntropyLoss"),
+                    Stream(SoftRecall),
+                ),
+            ),
+            inputs=["pred", "segm"],
+            outputs=["cross", "recall"],
+            rank=0,
+        )
+
+        model.to_device()
+        losses.to_device()
+
+        print("Using model:", repr(model))
+        args.arch = model.stream.summary
+
         train_cases, valid_cases = px.split_trainables(args.sources_path, shuffle=True, offset=i)
 
         queue = dataset.queue_generator(list(train_cases), 5)
@@ -130,7 +131,7 @@ if __name__ == '__main__':
         else:
             valid_dataset = dataset.GeneratorDataset(
                 ({"case_path": case_path} for case_path in valid_cases),
-                post_func=functools.partial(nibabelio.load, train=True, clip=(-300, 400))
+                post_func=functools.partial(nibabelio.load, segm=True, clip=(-300, 400))
             )
 
         print(f"Training dataset has {len(train_dataset)} elements in buffer.")

@@ -21,22 +21,24 @@ from train import validation_round, train
 debug = not torch.cuda.is_available()
 rich.reconfigure(width=180)
 
+
 if __name__ == '__main__':
     args = SimpleNamespace(
         batch_size=1,
-        buffer_increment=5 if debug else 2,
-        buffer_size=40 if debug else 40,
+        buffer_increment=1 if debug else 2,
+        buffer_size=10 if debug else 40,
         debug=debug,
         device=torch.device("cpu") if debug else torch.device("cuda:0"),
         epochs=40 if debug else 200,
-        grad_accumulation_steps=10,
         finals=2,
         fold_shape=(4, 4, 2) if debug else (16, 16, 8),
-        id=f"LiverTumor{int(time.time()) // 120:06X}",
+        grad_accumulation_steps=10,
+        group_id=f"LiverTumor{int(time.time()) // 120:06X}",
         lr=0.002,
         models_path=Path("../saved_models") if debug else Path('/gpfswork/rech/otc/uiu95bi/saved_models'),
         n_samples=4,
         norm_momentum=0.9,
+        repetitions=1 if debug else 4,
         slice_shape=(32, 32, 8) if debug else (512, 512, 32),
         sources_path=Path('/gpfswork/rech/otc/uiu95bi/sources'),
         turnover_ratio=0.05,
@@ -106,57 +108,58 @@ if __name__ == '__main__':
     print("Using model:", repr(model))
     args.arch = model.stream.summary
 
-    train_cases, valid_cases = px.split_trainables(args.sources_path, shuffle=True, offset="random")
+    for i in range(args.repetitions):
+        args.id = args.group_id + "-" + str(i)
+        train_cases, valid_cases = px.split_trainables(args.sources_path, shuffle=True, offset=i)
 
-    queue = dataset.queue_generator(list(train_cases), 5)
-    train_dataset = dataset.GeneratorDataset(
-        dataset.debug_slice_gen(None, args.slice_shape) if debug else dataset.train_slice_gen(queue, args),
-        buffer_size=args.buffer_size,
-        turnover_ratio=args.turnover_ratio,
-    )
-
-    if debug:
-        shape = args.slice_shape
-        shape = (shape[0], shape[1], 4 * shape[2] + random.randint(1, 6))
-        valid_dataset = dataset.GeneratorDataset(
-            dataset.debug_slice_gen(None, shape),
-            buffer_size=5,
-            turnover_size=1
-        )
-    else:
-        valid_dataset = dataset.GeneratorDataset(
-            ({"case_path": case_path} for case_path in valid_cases),
-            post_func=functools.partial(nibabelio.load, train=True, clip=(-300, 400))
+        queue = dataset.queue_generator(list(train_cases), 5)
+        train_dataset = dataset.GeneratorDataset(
+            dataset.debug_slice_gen(None, args.slice_shape) if debug else dataset.train_slice_gen(queue, args),
+            buffer_size=args.buffer_size,
+            turnover_ratio=args.turnover_ratio,
         )
 
-    print(f"Training dataset has {len(train_dataset)} elements in buffer.")
-    print(
-        f"Each element has a scan of shape {train_dataset[0]['scan'].shape} "
-        f"and a segm of shape {train_dataset[0]['segm'].shape}"
-    )
-    print(f"They are slices taken from a population of {len(list(train_cases))} cases.")
-    print(f"Validation dataset has {len(valid_dataset)} elements.")
+        if debug:
+            shape = args.slice_shape
+            shape = (shape[0], shape[1], 4 * shape[2] + random.randint(1, 6))
+            valid_dataset = dataset.GeneratorDataset(
+                dataset.debug_slice_gen(None, shape),
+                buffer_size=5,
+                turnover_size=1
+            )
+        else:
+            valid_dataset = dataset.GeneratorDataset(
+                ({"case_path": case_path} for case_path in valid_cases),
+                post_func=functools.partial(nibabelio.load, train=True, clip=(-300, 400))
+            )
 
-    run = report.init(config=vars(args), id=args.id, mute=debug)
-    args.start_time = time.time()
-    try:
-        optimizer = AdaBelief(
-            model.parameters(),
-            lr=args.lr,
-            eps=1e-8,
-            betas=(0.9, 0.999),
-            weight_decouple=False,
-            rectify=False,
-            print_change_log=False,
+        print(f"Training dataset has {len(train_dataset)} elements in buffer.")
+        print(
+            f"Each element has a scan of shape {train_dataset[0]['scan'].shape} "
+            f"and a segm of shape {train_dataset[0]['segm'].shape}"
         )
-        validation_round(model, losses, ds=valid_dataset, args=args)
-        train(model, losses, tds=train_dataset, vds=valid_dataset, args=args)
-        # train(ddp_model, train_dataset, train_loader, gpu, args)
-        # train(model=model, train_dataset=train_dataset, valid_dataset=valid_dataset, args=args)
-    except:
-        print(traceback.format_exc())
-    finally:
-        queue.send(True)
-        del train_dataset, valid_dataset
-        run.finish()
-    assert None is True, "Crash & burn!"
+        print(f"They are slices taken from a population of {len(list(train_cases))} cases.")
+        print(f"Validation dataset has {len(valid_dataset)} elements.")
+
+        run = report.init(config=vars(args), id=args.id, group=args.group_id, mute=debug)
+        args.start_time = time.time()
+        try:
+            optimizer = AdaBelief(
+                model.parameters(),
+                lr=args.lr,
+                eps=1e-8,
+                betas=(0.9, 0.999),
+                weight_decouple=False,
+                rectify=False,
+                print_change_log=False,
+            )
+            validation_round(model, losses, ds=valid_dataset, args=args)
+            train(model, losses, tds=train_dataset, vds=valid_dataset, args=args)
+            # train(ddp_model, train_dataset, train_loader, gpu, args)
+            # train(model=model, train_dataset=train_dataset, valid_dataset=valid_dataset, args=args)
+        except:
+            print(traceback.format_exc())
+        finally:
+            queue.send(True)
+            del train_dataset, valid_dataset
+            run.finish()

@@ -182,6 +182,7 @@ def click_action(event, shared_segm: SharedNdarray, *, action, brush, scan_size,
 def overwrite(store):
     target_case = store.selected_case
     segm = store.loaded_segm.as_numpy
+    segm = case_selection_top.unmaxpool(segm, pool_factor)
     nibabelio.save_segmentation(segm, Path(store.temp_folder.name))
 
     source_file = Path(store.temp_folder.name) / "segmentation.nii.gz"
@@ -197,7 +198,7 @@ def overwrite(store):
         print("  Overwriting", source_file.name)
     f.SetContentFile(str(source_file))
     f.Upload()
-    # print(f"NOT uploading: {source_file} >> {target_file}")
+    print(f"  ...done!")
 
 
 def load_local(store):

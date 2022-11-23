@@ -4,9 +4,8 @@ import torch
 from torch import Tensor
 from torch import nn
 
-from .utils import wrap
 from .streams import Stream
-
+from .utils import wrap
 
 class Structure(nn.ModuleList):
     def __init__(self, *args: nn.Module, custom_repr=None, **kwargs):

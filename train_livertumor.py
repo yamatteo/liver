@@ -37,6 +37,7 @@ if __name__ == '__main__':
         lr=0.002,
         models_path=Path("../saved_models") if debug else Path('/gpfswork/rech/otc/uiu95bi/saved_models'),
         n_samples=4,
+        rebuild=False,
         norm_momentum=0.9,
         repetitions=1 if debug else 4,
         slice_shape=(64, 64, 8) if debug else (512, 512, 32),
@@ -48,97 +49,105 @@ if __name__ == '__main__':
     for i in range(args.repetitions):
         args.id = args.group_id + "-" + str(i)
 
-        model = Wrapper(
-            Sequential(
-                StreamMixer(AsTensor, dtype=torch.float32),
-                Separate(
-                    StreamMixer(Identity),
-                    Sequential(
-                        StreamMixer(AvgPool3d, kernel_size=(2, 2, 1)),
-                        ConvBlock([4, 16, 16], actv="LeakyReLU"),
-                        StreamMixer(FoldNorm3d, args.fold_shape, num_features=16, momentum=0.9),
-                        SkipConnection(
-                            StreamMixer(MaxPool3d, kernel_size=(2, 2, 1)),
-                            ConvBlock([16, 32, 32], actv="LeakyReLU"),
-                            StreamMixer(FoldNorm3d, args.fold_shape, num_features=32, momentum=0.9),
+        if args.rebuild:
+            model = Architecture.rebuild(args.rebuild)
+        else:
+            model = Architecture(
+                Sequential(
+                    Separate(
+                        Identity(),
+                        Sequential(
+                            AvgPool3d(kernel_size=(2, 2, 1)),
+                            ConvBlock([4, 16, 16], actv="LeakyReLU"),
+                            FoldNorm3d(folded_shape=args.fold_shape, num_features=16, momentum=0.9),
                             SkipConnection(
-                                StreamMixer(MaxPool3d, kernel_size=(2, 2, 2)),
-                                ConvBlock([32, 64, 64], actv="LeakyReLU"),
-                                StreamMixer(FoldNorm3d, args.fold_shape, num_features=64, momentum=0.9),
-                                ConvBlock([64, 32, 32], actv="LeakyReLU", norm="InstanceNorm3d"),
-                                # Stream(FoldNorm3d, (4, 4, 4), num_features=32, momentum=0.9),
-                                StreamMixer(Dropout3d),
-                                StreamMixer(Upsample, scale_factor=(2, 2, 2), mode='nearest'),
-                                dim=1,
+                                MaxPool3d(kernel_size=(2, 2, 1)),
+                                ConvBlock([16, 32, 32], actv="LeakyReLU"),
+                                FoldNorm3d(folded_shape=args.fold_shape, num_features=32, momentum=0.9),
+                                SkipConnection(
+                                    MaxPool3d(kernel_size=(2, 2, 2)),
+                                    ConvBlock([32, 64, 64], actv="LeakyReLU"),
+                                    FoldNorm3d(folded_shape=args.fold_shape, num_features=64, momentum=0.9),
+                                    ConvBlock([64, 32, 32], actv="LeakyReLU", norm="InstanceNorm3d"),
+                                    Dropout3d(),
+                                    Upsample(scale_factor=(2, 2, 2), mode='nearest'),
+                                ),
+                                ConvBlock([64, 32, 16], actv="LeakyReLU", norm="InstanceNorm3d"),
+                                Dropout3d(),
+                                Upsample(scale_factor=(2, 2, 1), mode='nearest'),
                             ),
-                            ConvBlock([64, 32, 16], actv="LeakyReLU", norm="InstanceNorm3d"),
-                            # Stream(FoldNorm3d, (8, 8, 8), num_features=16, momentum=0.9),
-                            StreamMixer(Dropout3d),
-                            StreamMixer(Upsample, scale_factor=(2, 2, 1), mode='nearest'),
-                            dim=1,
+                            ConvBlock([32, 16, 16], actv="LeakyReLU", norm="InstanceNorm3d"),
+                            Dropout3d(),
+                            Upsample(scale_factor=(2, 2, 1), mode='trilinear'),
                         ),
-                        ConvBlock([32, 16, 16], actv="LeakyReLU", norm="InstanceNorm3d"),
-                        # Stream(InstanceNorm3d, 12),
-                        StreamMixer(Dropout3d),
-                        StreamMixer(Upsample, scale_factor=(2, 2, 1), mode='trilinear'),
-                    ),
-                    Sequential(
-                        StreamMixer(AvgPool3d, kernel_size=(4, 4, 1)),
-                        ConvBlock([4, 16, 16], actv="LeakyReLU"),
-                        StreamMixer(FoldNorm3d, args.fold_shape, num_features=16, momentum=0.9),
-                        SkipConnection(
-                            StreamMixer(MaxPool3d, kernel_size=(2, 2, 2)),
-                            ConvBlock([16, 32, 32], actv="LeakyReLU"),
-                            StreamMixer(FoldNorm3d, args.fold_shape, num_features=32, momentum=0.9),
+                        Sequential(
+                            AvgPool3d(kernel_size=(4, 4, 1)),
+                            ConvBlock([4, 16, 16], actv="LeakyReLU"),
+                            FoldNorm3d(folded_shape=args.fold_shape, num_features=16, momentum=0.9),
                             SkipConnection(
-                                StreamMixer(MaxPool3d, kernel_size=(2, 2, 2)),
-                                ConvBlock([32, 64, 64], actv="LeakyReLU"),
-                                StreamMixer(FoldNorm3d, args.fold_shape, num_features=64, momentum=0.9),
-                                ConvBlock([64, 32, 32], actv="LeakyReLU", norm="InstanceNorm3d"),
-                                # Stream(FoldNorm3d, (4, 4, 4), num_features=32, momentum=0.9),
-                                StreamMixer(Dropout3d),
-                                StreamMixer(Upsample, scale_factor=(2, 2, 2), mode='nearest'),
-                                dim=1,
+                                MaxPool3d(kernel_size=(2, 2, 2)),
+                                ConvBlock([16, 32, 32], actv="LeakyReLU"),
+                                FoldNorm3d(folded_shape=args.fold_shape, num_features=32, momentum=0.9),
+                                SkipConnection(
+                                    MaxPool3d(kernel_size=(2, 2, 2)),
+                                    ConvBlock([32, 64, 64], actv="LeakyReLU"),
+                                    FoldNorm3d(folded_shape=args.fold_shape, num_features=64, momentum=0.9),
+                                    ConvBlock([64, 32, 32], actv="LeakyReLU", norm="InstanceNorm3d"),
+                                    Dropout3d(),
+                                    Upsample(scale_factor=(2, 2, 2), mode='nearest'),
+                                ),
+                                ConvBlock([64, 32, 16], actv="LeakyReLU", norm="InstanceNorm3d"),
+                                Dropout3d(),
+                                Upsample(scale_factor=(2, 2, 2), mode='nearest'),
                             ),
-                            ConvBlock([64, 32, 16], actv="LeakyReLU", norm="InstanceNorm3d"),
-                            # Stream(FoldNorm3d, (8, 8, 8), num_features=16, momentum=0.9),
-                            StreamMixer(Dropout3d),
-                            StreamMixer(Upsample, scale_factor=(2, 2, 2), mode='nearest'),
-                            dim=1,
+                            ConvBlock([32, 16, 16], actv="LeakyReLU", norm="InstanceNorm3d"),
+                            Dropout3d(),
+                            Upsample(scale_factor=(4, 4, 1), mode='trilinear'),
                         ),
-                        ConvBlock([32, 16, 16], actv="LeakyReLU", norm="InstanceNorm3d"),
-                        # Stream(InstanceNorm3d, 12),
-                        StreamMixer(Dropout3d),
-                        StreamMixer(Upsample, scale_factor=(4, 4, 1), mode='trilinear'),
                     ),
+                    Cat(),
+                    ConvBlock([36, 32, 16, 2], kernel_size=(1, 1, 1), actv="LeakyReLU"),
                 ),
-                StreamMixer(Cat, dim=1),
-                ConvBlock([36, 32, 16, 2], kernel_size=(1, 1, 1), actv="LeakyReLU"),
-            ),
-            inputs=["scan"],
-            outputs=["pred"],
-            rank=0,
-            storage=args.models_path / (args.id + ".pth"),
-        )
+                inputs=[("scan", torch.float32)],
+                outputs=["pred"],
+                cuda_rank=0,
+                storage=args.models_path / (args.id + ".pt"),
+            )
 
-        losses = Wrapper(
+        metrics = Architecture(
             Sequential(
                 Parallel(
-                    StreamMixer("Identity"),
-                    StreamMixer("Clamp", 0, 1),
+                    Argmax(),
+                    Clamp(0, 1)
                 ),
                 Separate(
-                    StreamMixer("CrossEntropyLoss"),
-                    StreamMixer(SoftRecall),
-                ),
+                    Jaccard(index=1),
+                    Recall(index=1)
+                )
             ),
-            inputs=["pred", "segm"],
-            outputs=["cross", "recall"],
-            rank=0,
+            inputs=["pred", ("segm", torch.int64)],
+            outputs=["jaccard", "recall"],
+        )
+
+        loss = Architecture(
+            Sequential(
+                Parallel(
+                    Identity(),
+                    Clamp(0, 1),
+                ),
+                Separate(
+                    CrossEntropyLoss(),
+                    SoftRecall(),
+                ),
+                Expression("args[0] + (1 - args[1])")
+            ),
+            inputs=["pred", ("segm", torch.int64)],
+            outputs=["loss"],
+            cuda_rank=0,
         )
 
         model.to_device()
-        losses.to_device()
+        loss.to_device()
 
         print("Using model:", repr(model))
         args.arch = model.stream.summary
@@ -178,7 +187,7 @@ if __name__ == '__main__':
         args.start_time = time.time()
         try:
             optimizer = AdaBelief(
-                model.parameters(),
+                model.stream.parameters(),
                 lr=args.lr,
                 eps=1e-8,
                 betas=(0.9, 0.999),
@@ -186,13 +195,12 @@ if __name__ == '__main__':
                 rectify=False,
                 print_change_log=False,
             )
-            validation_round(model, losses, ds=valid_dataset, args=args)
-            train(model, losses, tds=train_dataset, vds=valid_dataset, args=args)
-            # train(ddp_model, train_dataset, train_loader, gpu, args)
-            # train(model=model, train_dataset=train_dataset, valid_dataset=valid_dataset, args=args)
-        except:
-            print(traceback.format_exc())
+            train(model, loss=loss, metrics=metrics, tds=train_dataset, vds=valid_dataset, args=args)
         finally:
-            queue.send(True)
             del train_dataset, valid_dataset
             run.finish()
+        try:
+            queue.send(None)
+            queue.send(True)
+        except Exception as err:
+            print(err)

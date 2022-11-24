@@ -178,7 +178,8 @@ def train_slice_gen(queue, args):
 
 def debug_slice_gen(_, shape):
     while True:
+        t = np.random.randn(4, *shape)
         yield dict(
-            scan=np.random.randn(4, *shape),
-            segm=np.random.randint(0, 2, shape),
+            scan=t,
+            segm=(np.abs(t).sum(axis=0) / np.max(np.abs(t).sum(axis=0)) + 0.49).astype(np.int64),
         )

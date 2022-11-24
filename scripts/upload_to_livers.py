@@ -1,6 +1,8 @@
 import argparse
 from pathlib import Path
 
+import httplib2
+
 import frontend.pydrive_utils as pu
 import path_explorer as px
 
@@ -20,13 +22,14 @@ def main():
             new_name = f"HE016-{str(case)[3:6]}"
         print("Considering", target / new_name)
         target_case = (target / new_name).mkdir()
+        existing_files = [ file.name for file in target_case.iterdir()]
         for filename in ["segmentation.nii.gz", "registration_data.pickle", *[f"registered_phase_{ph}.nii.gz" for ph in "bavt"]]:
             source_file = sources/case/filename
             target_file = target_case/filename
             if not source_file.exists():
                 print(" ", source_file, "do not exists")
                 continue
-            if not target_file.exists():
+            if target_file.name not in existing_files:
                 f = pu.drive.CreateFile(dict(title=source_file.name, parents=[{"id": target_case.id}]))
                 print("  Uploading", source_file.name)
             elif args.overwrite:
@@ -38,7 +41,10 @@ def main():
                 print("  File", source_file.name, "already there.")
                 continue
             f.SetContentFile(str(source_file))
-            f.Upload()
+            try:
+                f.Upload()
+            except httplib2.error.RedirectMissingLocation:
+                print("Error while uploading: RedirectMissingLocation")
 
 
 

@@ -45,12 +45,14 @@ def load(case_path: Path, scan: bool = True, segm: bool = False, clip: tuple[int
     else:
         scan = None
 
-    if segm:
+    try:
+        assert segm
         segm = load_ndarray(case_path / f"segmentation.nii.gz")
-        assert np.all(segm < 3), "segmentation has indices above 2"
+        assert np.all(segm < 3), "Segmentation has indices above 2."
         segm = segm[..., bottom:top]
         segm = segm.astype(np.int64)
-    else:
+    except (FileNotFoundError, AssertionError) as err:
+        print("Error loading segmentation.", err)
         segm = None
 
     return dict(scan=scan, segm=segm, name=name)

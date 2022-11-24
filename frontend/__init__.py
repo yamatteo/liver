@@ -2,6 +2,7 @@ from functools import partial
 from pathlib import Path
 from sys import platform
 from tkinter import *
+from tkinter import filedialog
 
 import numpy as np
 
@@ -16,6 +17,7 @@ pool_factor = 2
 def build_root():
     root = AsyncTk()
     store = root.store
+    store.height = 0
 
     root.geometry("1280x800")
     root.minsize(1280, 800)
@@ -70,6 +72,8 @@ def build_root():
 
     menu_segmentation = Menu(menubar)
     menubar.add_cascade(menu=menu_segmentation, label='Segmentation')
+    menu_segmentation.add_command(label="Load local segmentation", command=partial(load_local, store))
+    menu_segmentation.add_separator()
     menu_segmentation.add_command(label="Upload and overwrite on LIVERS", command=partial(overwrite, store))
 
     menu_view = Menu(menubar)
@@ -174,9 +178,11 @@ def click_action(event, shared_segm: SharedNdarray, *, action, brush, scan_size,
     segm[xa:xb, ya:yb, z] = action(brush[xo:xo + xb - xa, yo:yo + yb - ya], segm[xa:xb, ya:yb, z])
     shared_segm.update(segm)
 
+
 def overwrite(store):
     target_case = store.selected_case
     segm = store.loaded_segm.as_numpy
+    segm = case_selection_top.unmaxpool(segm, pool_factor)
     nibabelio.save_segmentation(segm, Path(store.temp_folder.name))
 
     source_file = Path(store.temp_folder.name) / "segmentation.nii.gz"
@@ -192,7 +198,28 @@ def overwrite(store):
         print("  Overwriting", source_file.name)
     f.SetContentFile(str(source_file))
     f.Upload()
-    # print(f"NOT uploading: {source_file} >> {target_file}")
+    print(f"  ...done!")
+
+
+def load_local(store):
+    filetypes = (
+        ('Compressed nifti', '*.nii.gz'),
+    )
+
+    filename = filedialog.askopenfilename(
+        title='Load a segmentation',
+        initialdir='/',
+        filetypes=filetypes,
+    )
+
+    affine, bottom, top, height = nibabelio.load_registration_data(Path(store.temp_folder.name))
+    segm = nibabelio.load_ndarray(Path(filename))
+    segm = segm[..., bottom:top]
+    segm = segm.astype(np.int64)
+    segm = case_selection_top.maxpool(segm, pool_factor)
+    store.loaded_segm = SharedNdarray.from_numpy(segm)
+    store.redraw = True
+
 
 def stub(*args, **kwargs):
     print("Stub function", args, kwargs)

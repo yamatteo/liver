@@ -52,7 +52,6 @@ class Structure(nn.ModuleList):
     @classmethod
     def rebuild(cls, data):
         if isinstance(data, dict) and "class_name" in data and "args" in data and "kwargs" in data:
-            print("Rebuilding", data)
             class_name = data["class_name"]
             args = data["args"]
             args = cls.rebuild(args)

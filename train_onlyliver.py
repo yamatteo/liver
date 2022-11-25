@@ -130,7 +130,7 @@ def main():
                     Precision(index=1)
                 )
             ),
-            inputs=["ol_pred", ("segm", torch.int64)],
+            inputs=["pred", "ol_pred", ("segm", torch.int64)],
             outputs=["jaccard", "precision"],
         )
 
@@ -161,7 +161,7 @@ def main():
 
         train_cases, valid_cases = px.split_trainables(args.sources_path, shuffle=True, offset=i)
 
-        queue = dataset.queue_generator(list(train_cases), 5)
+        queue = dataset.queue_generator(list(train_cases), 8)
         train_dataset = dataset.GeneratorDataset(
             dataset.debug_slice_gen(None, args.slice_shape) if debug else dataset.train_slice_gen(queue, args),
             buffer_size=args.buffer_size,
@@ -240,17 +240,10 @@ def validation_round(model: Architecture, *, lt: Architecture, metrics: Architec
         name = data.get("name", ["no name"])[0]  # 0 as in 'the name of the first (unique) case in the batch'
         scan = data["scan"]
         segm = data["segm"]
-        pred = []
-        for (x, t) in slices(scan, segm, shape=args.slice_shape, pad_up_to=1):
-            items = lt.forward({"scan": x})
-            pred.append(items["pred"])
-        pred = torch.cat(pred, dim=-1)[..., :scan.shape[-1]].cpu().numpy()
-        ol_pred = []
-        for (x, p) in slices(scan, pred, shape=args.slice_shape, pad_up_to=1):
-            items = model.forward({"scan": x, "pred": p})
-            ol_pred.append(items["ol_pred"])
-        ol_pred = torch.cat(ol_pred, dim=-1)[..., :scan.shape[-1]]
-        _metrics = metrics.forward(dict(data, ol_pred=ol_pred))
+        lt.apply(data, args.slice_shape)
+        model.apply(data, args.slice_shape)
+        ol_pred = data["ol_pred"]
+        _metrics = metrics.forward(data)
         scores.append(dict(_metrics, name=name))
         # segm = torch.as_tensor(segm, device=pred.device).clamp(0, 1)
         # recall = losses(dict(pred=pred, segm=segm)).get("recall").item()
@@ -289,6 +282,7 @@ def train_epoch(model: Architecture, *, lt: Architecture, loss: Architecture, ds
         lt.forward(data)
         model.forward(data)
         loss.forward(data)
+        data["loss"] /= args.grad_accumulation_steps
         data["loss"].backward()
         round_scores.update({key: data["loss"].item()})
         if (key + 1) % args.grad_accumulation_steps == 0 or key + 1 == len(ds):

@@ -244,7 +244,7 @@ def validation_round(model: Architecture, *, lt: Architecture, metrics: Architec
         for (x, t) in slices(scan, segm, shape=args.slice_shape, pad_up_to=1):
             items = lt.forward({"scan": x})
             pred.append(items["pred"])
-        pred = torch.cat(pred, dim=-1)[..., :scan.shape[-1]]
+        pred = torch.cat(pred, dim=-1)[..., :scan.shape[-1]].cpu().numpy()
         ol_pred = []
         for (x, p) in slices(scan, pred, shape=args.slice_shape, pad_up_to=1):
             items = model.forward({"scan": x, "pred": p})

@@ -1,4 +1,0 @@
-matplotlib
-nibabel
-numpy
-pydrive

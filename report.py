@@ -47,7 +47,7 @@ def sample(scan: np.ndarray, pred: np.ndarray, segm: np.ndarray):
     return wandb.Image(img)
 
 
-def samples(scan: np.ndarray, pred: np.ndarray, segm: np.ndarray, *, num=4):
+def samples(scan: np.ndarray, pred: np.ndarray, segm: np.ndarray, *, num=4, only_liver=False):
     # scan.shape is [N, C, X, Y, Z], segm and pred are [N, X, Y, Z]
     if muted:
         return [[]]
@@ -59,9 +59,14 @@ def samples(scan: np.ndarray, pred: np.ndarray, segm: np.ndarray, *, num=4):
             z = step + step*zi
 
             white = np.clip(scan[n, 2, :, :, z], 0, 255)
-            red = white + 60 * (pred[n, :, :, z] == 1)
-            green = white + 60 * (pred[n, :, :, z] == 2)
-            blue = white + 60 * (segm[n, :, :, z] > 0)
+            if only_liver:
+                red = white + 60 * (pred[n, :, :, z] == 1)
+                green = white + 60 * (segm[n, :, :, z] == 2)
+                blue = white + 60 * (segm[n, :, :, z] == 1)
+            else:
+                red = white + 60 * (pred[n, :, :, z] == 1)
+                green = white + 60 * (pred[n, :, :, z] == 2)
+                blue = white + 60 * (segm[n, :, :, z] > 0)
             img = np.clip(np.stack([red, green, blue], axis=-1), 0, 255)
             n_samples.append(wandb.Image(img))
         samples.append(n_samples)

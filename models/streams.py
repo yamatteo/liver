@@ -180,9 +180,30 @@ class LeakyReLU(Stream, nn.LeakyReLU):
     pass
 
 
+class MaskOf(Stream, nn.Module):
+    def __init__(self, index):
+        super(MaskOf, self).__init__()
+        self.index = index
+
+    def forward(self, input: Tensor) -> tuple[Tensor]:
+        return torch.as_tensor(input == self.index, dtype=torch.int64),
+
+
 class MaxPool3d(Stream, nn.MaxPool3d):
     def __init__(self, kernel_size=(2, 2, 2)):
         super(MaxPool3d, self).__init__(kernel_size=kernel_size)
+
+
+class Precision(Stream, nn.Module):
+    def __init__(self, index=1):
+        super(Precision, self).__init__()
+        self.index = index
+
+    def forward(self, input: Tensor, target: Tensor) -> tuple[Tensor]:
+        index = self.index
+        true_positive = 0.1 + ((input == index) * (target == index)).sum()
+        all_positives = 0.1 + (input == index).sum()
+        return wrap(true_positive / all_positives)
 
 
 class Recall(Stream, nn.Module):
@@ -197,11 +218,11 @@ class Recall(Stream, nn.Module):
         return wrap(true_positive / ground_truth)
 
 
-class SoftRecall(Stream, nn.Module):
-    def __init__(self, dim=1, klass=1, num_classes=None):
-        super(SoftRecall, self).__init__()
+class SoftPrecision(Stream, nn.Module):
+    def __init__(self, dim=1, index=1, num_classes=None):
+        super(SoftPrecision, self).__init__()
         self.dim = dim
-        self.klass = klass
+        self.index = index
         self.num_classes = num_classes
 
     def forward(self, input: Tensor, target: Tensor) -> tuple[Tensor]:
@@ -214,8 +235,30 @@ class SoftRecall(Stream, nn.Module):
         target = functional.one_hot(target, num_classes).float()
         dims.insert(self.dim, -1)
         target = target.permute(dims)
-        input = input[:, self.klass]
-        target = target[:, self.klass]
+        input = input[:, self.index]
+        target = target[:, self.index]
+        return wrap((0.1 + torch.sum(torch.minimum(input, target))) / (0.1 + torch.sum(input)))
+
+
+class SoftRecall(Stream, nn.Module):
+    def __init__(self, dim=1, index=1, num_classes=None):
+        super(SoftRecall, self).__init__()
+        self.dim = dim
+        self.index = index
+        self.num_classes = num_classes
+
+    def forward(self, input: Tensor, target: Tensor) -> tuple[Tensor]:
+        input = functional.softmax(input, dim=self.dim)
+        if self.num_classes:
+            num_classes = self.num_classes
+        else:
+            num_classes = input.size(self.dim)
+        dims = list(range(target.ndim))
+        target = functional.one_hot(target, num_classes).float()
+        dims.insert(self.dim, -1)
+        target = target.permute(dims)
+        input = input[:, self.index]
+        target = target[:, self.index]
         return wrap((0.1 + torch.sum(torch.minimum(input, target))) / (0.1 + torch.sum(target)))
 
 

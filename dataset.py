@@ -169,7 +169,7 @@ def train_slice_gen(queue, args):
     shape = args.slice_shape
     stride = (shape[0], shape[1], shape[2] // 2)
     for bundle_dict in queue:
-        for scan, segm in slices(bundle_dict["scan"], bundle_dict["segm"], shape=args.slice_shape, stride=stride):
+        for scan, segm in slices((bundle_dict["scan"], bundle_dict["segm"]), shape=args.slice_shape, mode="overlapping"):
             yield dict(
                 scan=scan,
                 segm=segm,

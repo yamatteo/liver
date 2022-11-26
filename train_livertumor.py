@@ -10,19 +10,19 @@ import rich
 from adabelief_pytorch import AdaBelief
 from rich import print
 from torch.nn import *
+from torch.utils.data import DataLoader
 
 import dataset
 import nibabelio
 import path_explorer as px
 import report
+import slicing
 from models import *
-from train import validation_round, train
 
 debug = not torch.cuda.is_available()
 rich.reconfigure(width=180)
 
-
-if __name__ == '__main__':
+def main():
     args = SimpleNamespace(
         batch_size=1,
         buffer_increment=1 if debug else 2,
@@ -55,58 +55,39 @@ if __name__ == '__main__':
             model = Architecture(
                 Sequential(
                     Separate(
-                        Identity(),
-                        Sequential(
-                            AvgPool3d(kernel_size=(2, 2, 1)),
-                            ConvBlock([4, 16, 16], actv="LeakyReLU"),
-                            FoldNorm3d(folded_shape=args.fold_shape, num_features=16, momentum=0.9),
-                            SkipConnection(
-                                MaxPool3d(kernel_size=(2, 2, 1)),
-                                ConvBlock([16, 32, 32], actv="LeakyReLU"),
-                                FoldNorm3d(folded_shape=args.fold_shape, num_features=32, momentum=0.9),
-                                SkipConnection(
-                                    MaxPool3d(kernel_size=(2, 2, 2)),
-                                    ConvBlock([32, 64, 64], actv="LeakyReLU"),
-                                    FoldNorm3d(folded_shape=args.fold_shape, num_features=64, momentum=0.9),
-                                    ConvBlock([64, 32, 32], actv="LeakyReLU", norm="InstanceNorm3d"),
-                                    Dropout3d(),
-                                    Upsample(scale_factor=(2, 2, 2), mode='nearest'),
+                        EncDecConnection("avg", "up_n", (2, 2, 1))(
+                            ConvBlock([4, 16, 16], actv=LeakyReLU, norm=FoldNorm3d),
+                            EncDecConnection("max", "up_n", (2, 2, 1))(
+                                ConvBlock([16, 32, 32], actv=LeakyReLU, norm=FoldNorm3d),
+                                EncDecConnection("max", "up_n", (2, 2, 2))(
+                                    ConvBlock([32, 64, 64], actv=LeakyReLU, norm=FoldNorm3d),
+                                    EncDecConnection("max", "up_n", (2, 2, 2))(
+                                        ConvBlock([64, 64, 64], actv=LeakyReLU, norm=FoldNorm3d)
+                                    ),
+                                    ConvBlock([128, 64, 32], actv=LeakyReLU, norm=FoldNorm3d, drop=Dropout3d)
                                 ),
-                                ConvBlock([64, 32, 16], actv="LeakyReLU", norm="InstanceNorm3d"),
-                                Dropout3d(),
-                                Upsample(scale_factor=(2, 2, 1), mode='nearest'),
+                                ConvBlock([64, 32, 16], actv=LeakyReLU, norm=FoldNorm3d, drop=Dropout3d)
                             ),
-                            ConvBlock([32, 16, 16], actv="LeakyReLU", norm="InstanceNorm3d"),
-                            Dropout3d(),
-                            Upsample(scale_factor=(2, 2, 1), mode='trilinear'),
+                            ConvBlock([32, 32, 16], actv=LeakyReLU, norm=FoldNorm3d, drop=Dropout3d)
                         ),
-                        Sequential(
-                            AvgPool3d(kernel_size=(4, 4, 1)),
-                            ConvBlock([4, 16, 16], actv="LeakyReLU"),
-                            FoldNorm3d(folded_shape=args.fold_shape, num_features=16, momentum=0.9),
-                            SkipConnection(
-                                MaxPool3d(kernel_size=(2, 2, 2)),
-                                ConvBlock([16, 32, 32], actv="LeakyReLU"),
-                                FoldNorm3d(folded_shape=args.fold_shape, num_features=32, momentum=0.9),
-                                SkipConnection(
-                                    MaxPool3d(kernel_size=(2, 2, 2)),
-                                    ConvBlock([32, 64, 64], actv="LeakyReLU"),
-                                    FoldNorm3d(folded_shape=args.fold_shape, num_features=64, momentum=0.9),
-                                    ConvBlock([64, 32, 32], actv="LeakyReLU", norm="InstanceNorm3d"),
-                                    Dropout3d(),
-                                    Upsample(scale_factor=(2, 2, 2), mode='nearest'),
+                        EncDecConnection("avg", "up_n", (4, 4, 1), cat=False)(
+                            ConvBlock([4, 16, 16], actv=LeakyReLU, norm=FoldNorm3d),
+                            EncDecConnection("imax", "iunmax", (2, 2, 2), cat=False)(
+                                ConvBlock([16, 32, 32], actv=LeakyReLU, norm=FoldNorm3d),
+                                EncDecConnection("imax", "iunmax", (2, 2, 2), cat=False)(
+                                    ConvBlock([32, 64, 64], actv=LeakyReLU, norm=FoldNorm3d),
+                                    EncDecConnection("imax", "iunmax", (2, 2, 2), cat=False)(
+                                        ConvBlock([64, 64, 64], actv=LeakyReLU, norm=FoldNorm3d)
+                                    ),
+                                    ConvBlock([64, 64, 64, 32], actv=LeakyReLU, norm=FoldNorm3d, drop=Dropout3d)
                                 ),
-                                ConvBlock([64, 32, 16], actv="LeakyReLU", norm="InstanceNorm3d"),
-                                Dropout3d(),
-                                Upsample(scale_factor=(2, 2, 2), mode='nearest'),
+                                ConvBlock([32, 32, 32, 16], actv=LeakyReLU, norm=FoldNorm3d, drop=Dropout3d)
                             ),
-                            ConvBlock([32, 16, 16], actv="LeakyReLU", norm="InstanceNorm3d"),
-                            Dropout3d(),
-                            Upsample(scale_factor=(4, 4, 1), mode='trilinear'),
+                            ConvBlock([16, 16, 16, 16], actv=LeakyReLU, norm=FoldNorm3d, drop=Dropout3d)
                         ),
                     ),
                     Cat(),
-                    ConvBlock([36, 32, 16, 2], kernel_size=(1, 1, 1), actv="LeakyReLU"),
+                    ConvBlock([4+16+16, 32, 16, 2], kernel_size=(1, 1, 1), actv=LeakyReLU),
                 ),
                 inputs=[("scan", torch.float32)],
                 outputs=["pred"],
@@ -186,15 +167,6 @@ if __name__ == '__main__':
         run = report.init(config=vars(args), id=args.id, group=args.group_id, mute=debug)
         args.start_time = time.time()
         try:
-            optimizer = AdaBelief(
-                model.stream.parameters(),
-                lr=args.lr,
-                eps=1e-8,
-                betas=(0.9, 0.999),
-                weight_decouple=False,
-                rectify=False,
-                print_change_log=False,
-            )
             train(model, loss=loss, metrics=metrics, tds=train_dataset, vds=valid_dataset, args=args)
         finally:
             del train_dataset, valid_dataset
@@ -204,3 +176,115 @@ if __name__ == '__main__':
             queue.send(True)
         except Exception as err:
             print(err)
+
+
+def train_epoch(model: Architecture, *, loss: Architecture, ds: dataset.GeneratorDataset, epoch, optimizer, args):
+    """Assuming model is single stream."""
+    round_scores = dict()
+    optimizer.zero_grad()
+    assert args.batch_size == 1
+    dl = DataLoader(ds, batch_size=args.batch_size)
+    for data in dl:
+        key = int(data["keys"][0])
+        model.forward(data)
+        loss.forward(data)
+        data["loss"] /= args.grad_accumulation_steps
+        data["loss"].backward()
+        round_scores.update({key: data["loss"].item()})
+        if (key + 1) % args.grad_accumulation_steps == 0 or key + 1 == len(ds):
+            optimizer.step()
+            optimizer.zero_grad()
+    ds.drop(round_scores)
+    mean_loss = sum(round_scores.values()) * args.grad_accumulation_steps / len(ds)
+    print(
+        f"Training epoch {epoch + 1}/{args.epochs}. "
+        f"Loss: {mean_loss:.2e}. "
+    )
+    report.append({"loss": mean_loss})
+
+
+@torch.no_grad()
+def validation_round(model: Architecture, *, metrics: Architecture, ds: dataset.GeneratorDataset, epoch=0, args):
+    scores = []
+    samples = {}
+    dl = DataLoader(ds)
+    for data in dl:
+        name = data.get("name", ["no name"])[0]  # 0 as in 'the name of the first (unique) case in the batch'
+        scan = data["scan"]
+        segm = data["segm"]
+        apply(model, data, args.slice_shape)
+        pred = data["pred"]
+        _metrics = metrics.forward(dict(data, pred=pred))
+        scores.append(dict(_metrics, name=name))
+        # segm = torch.as_tensor(segm, device=pred.device).clamp(0, 1)
+        # recall = losses(dict(pred=pred, segm=segm)).get("recall").item()
+        # intersection = torch.sum(pred * segm).item() + 0.1
+        # union = torch.sum(torch.clamp(pred + segm, 0, 1)).item() + 0.1
+        pred = torch.argmax(pred, dim=1).cpu().numpy()
+        samples[f"samples: {name}"] = report.samples(
+            scan,
+            pred,
+            segm,
+        )[0]  # 0 as in 'the samples from the first (unique) case in the batch'
+    print("Validation scores are:")
+    for score in scores:
+        name = score["name"]
+        jaccard = score["jaccard"]
+        recall = score["recall"]
+        print(f"{name:>12}:{100 * jaccard:6.1f}% jaccard --- {100 * recall:6.1f}% recall")
+    total_time = time.time() - args.start_time
+    mean_time = total_time / max(1, epoch)
+    print(f"Mean time: {mean_time:.0f}s per training epoch.")
+    mean_jaccard = sum(item["jaccard"] for item in scores) / len(scores)
+    mean_recall = sum(item["recall"] for item in scores) / len(scores)
+    report.append(dict(samples, validation_score=mean_jaccard, validation_recall=mean_recall), commit=False)
+
+
+def train(model: Architecture, *, loss: Architecture, metrics: Architecture, tds: dataset.GeneratorDataset,
+          vds: dataset.GeneratorDataset, args):
+    optimizer = AdaBelief(
+        model.stream.parameters(),
+        lr=args.lr,
+        eps=1e-8,
+        betas=(0.9, 0.999),
+        weight_decouple=False,
+        rectify=False,
+        print_change_log=False,
+    )
+    model.stream.eval()
+    validation_round(model, metrics=metrics, ds=vds, epoch=0, args=args)
+    for epoch in range(args.epochs):
+        model.stream.train()
+        train_epoch(model, loss=loss, ds=tds, epoch=epoch, optimizer=optimizer, args=args)
+        if (epoch + 1) % 20 == 0:
+            model.stream.eval()
+            validation_round(model, metrics=metrics, ds=vds, epoch=epoch + 1, args=args)
+            model.save()
+            tds.buffer_size += args.buffer_increment
+            args.grad_accumulation_steps = (tds.buffer_size + 3) // 4
+    report.append({})
+
+
+def apply(model, items: dict, slice_shape: tuple[int, ...]) -> dict:
+    input_names = tuple(input__.name for input__ in model.inputs)
+    inputs = tuple(input__(items).cpu().numpy() for input__ in model.inputs)
+    height = inputs[0].shape[-1]
+    assert all(input.shape[-1] == height for input in inputs)
+    for starts, *_inputs in slicing.slices(inputs, shape=slice_shape, mode="overlapping", indices=True):
+        piece_items = model.forward({
+            name: input__(array)
+            for name, input__, array in zip(input_names, model.inputs, _inputs)
+        })
+        try:
+            for output in model.outputs:
+                items[output] = torch.cat([
+                    items[output][..., :starts[-1]],
+                    piece_items[output]
+                ], dim=-1)
+        except KeyError:
+            for output in model.outputs:
+                items[output] = piece_items[output]
+    return items
+
+if __name__=="__main__":
+    main()

@@ -3,7 +3,6 @@ from typing import Union
 
 import torch
 
-import slicing
 from .streams import Stream
 from .structures import Structure
 
@@ -72,22 +71,22 @@ class Architecture:
             *repr(self.stream).splitlines()
         ])
 
-    def apply(self, items: dict, slice_shape: tuple[int, ...]) -> dict:
-        out = {output: [] for output in self.outputs}
-        input_names = tuple(input__.name for input__ in self.inputs)
-        inputs = tuple(input__(items).cpu().numpy() for input__ in self.inputs)
-        height = inputs[0].shape[-1]
-        assert all(input.shape[-1] == height for input in inputs)
-        for inputs in slicing.slices(*inputs, shape=slice_shape, pad_up_to=1):
-            piece_items = self.forward({
-                name: input__(array)
-                for name, input__, array in zip(input_names, self.inputs, inputs)
-            })
-            for output in self.outputs:
-                out[output].append(piece_items[output])
-        for output in self.outputs:
-            items[output] = torch.cat(out[output], dim=-1)[..., :height]
-        return items
+    # def apply(self, items: dict, slice_shape: tuple[int, ...]) -> dict:
+    #     out = {output: [] for output in self.outputs}
+    #     input_names = tuple(input__.name for input__ in self.inputs)
+    #     inputs = tuple(input__(items).cpu().numpy() for input__ in self.inputs)
+    #     height = inputs[0].shape[-1]
+    #     assert all(input.shape[-1] == height for input in inputs)
+    #     for inputs in slicing.slices(*inputs, shape=slice_shape, pad_up_to=1):
+    #         piece_items = self.forward({
+    #             name: input__(array)
+    #             for name, input__, array in zip(input_names, self.inputs, inputs)
+    #         })
+    #         for output in self.outputs:
+    #             out[output].append(piece_items[output])
+    #     for output in self.outputs:
+    #         items[output] = torch.cat(out[output], dim=-1)[..., :height]
+    #     return items
 
     def forward(self, items: dict) -> dict:
         tensors = tuple(input__(items) for input__ in self.inputs)

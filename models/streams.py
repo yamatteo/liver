@@ -16,7 +16,8 @@ class Stream(nn.Module):
         self.relevant_kwargs = {
             key: value
             for key, value in kwargs.items()
-            if key in params and (value != params[key].default or params[key].kind == inspect.Parameter.POSITIONAL_OR_KEYWORD)
+            if key in params and (
+                        value != params[key].default or params[key].kind == inspect.Parameter.POSITIONAL_OR_KEYWORD)
         }
         params = list(params.values())
         self.relevant_args = tuple(arg for arg, param in zip(args, params) if arg != param.default)
@@ -131,17 +132,21 @@ class Expression(Stream, nn.Module):
     def forward(self, *args: Tensor) -> tuple[Tensor, ...]:
         return wrap(eval(self.expression))  # Returns a tuple of Tensor
 
+
 class _FoldNorm3d(nn.BatchNorm3d):
     def __init__(self, num_features, *, folded_shape, momentum):
         super(_FoldNorm3d, self).__init__(num_features, momentum=momentum)
 
+
 class FoldNorm3d(Stream, _FoldNorm3d):
-    def __init__(self, num_features, *, folded_shape, momentum):
+    def __init__(self, num_features, *, folded_shape=None, momentum):
         super(FoldNorm3d, self).__init__(num_features, folded_shape=folded_shape, momentum=momentum)
         self.folded_shape = folded_shape
 
     def forward(self, input: Tensor) -> Tuple[Tensor]:
         n, c, x, y, z = input.shape
+        if self.folded_shape is None:
+            self.set_shape(input.shape)
         sx, sy, sz = self.folded_shape
         fx, fy, fz = x // sx, y // sy, z // sz
         input = input.view([n, c, fx, sx, fy, sy, fz, sz]) \
@@ -153,6 +158,20 @@ class FoldNorm3d(Stream, _FoldNorm3d):
             .reshape([n, c, x, y, z])
         return input,  # Returns a tuple, as in Stream.forward
 
+    def set_shape(self, input_shape):
+        n, c, x, y, z = input_shape
+        top = (n * x * y * z) ** 0.5
+        sx, sy, sz = 1, 1, 1
+        while sx * sy * sz <= top:
+            fx, fy, fz = x // sx, y // sy, z // sz
+            if fx == max(fx, fy, fz):
+                sx *= 2
+            elif fy == max(fx, fy, fz):
+                sy *= 2
+            else:
+                sz *= 2
+        print(f"FoldNorm3d{input_shape} set shape to {(sx, sy, sz)}")
+        self.folded_shape = sx, sy, sz
 
 
 class Identity(Stream, nn.Identity):
@@ -190,8 +209,13 @@ class MaskOf(Stream, nn.Module):
 
 
 class MaxPool3d(Stream, nn.MaxPool3d):
+    def __init__(self, kernel_size=(2, 2, 2), return_indices=False):
+        super(MaxPool3d, self).__init__(kernel_size=kernel_size, return_indices=return_indices)
+
+
+class MaxUnpool3d(Stream, nn.MaxUnpool3d):
     def __init__(self, kernel_size=(2, 2, 2)):
-        super(MaxPool3d, self).__init__(kernel_size=kernel_size)
+        super(MaxUnpool3d, self).__init__(kernel_size=kernel_size)
 
 
 class Precision(Stream, nn.Module):

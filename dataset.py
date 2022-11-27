@@ -120,7 +120,7 @@ def deformed(bundle) -> dict:
     return dict(bundle, scan=scan, segm=segm)
 
 
-def put(q, case_path, deform, clip=(-300, 400)):
+def put(q, case_path, deform, clip):
     # print("Loading", case_path)
     bundle = nibabelio.load(case_path, segm=True, clip=clip)
     if deform:
@@ -129,7 +129,7 @@ def put(q, case_path, deform, clip=(-300, 400)):
     q.put(bundle)
 
 
-def queue_generator(case_list: list[Path], length=2):
+def queue_generator(case_list: list[Path], *, length=2, clip):
     ctx = mp.get_context('spawn')
     q = ctx.Queue()
     procs = []
@@ -140,7 +140,7 @@ def queue_generator(case_list: list[Path], length=2):
     while stop is None:
         if len(procs) < length:
             # p = ctx.Process(target=put, args=(q, next(case_list), True))
-            p = ctx.Process(target=put, args=(q, next(case_list), computed >= num_cases))
+            p = ctx.Process(target=put, args=(q, next(case_list), computed >= num_cases, clip))
             procs.append(p)
             p.start()
             computed += 1

@@ -55,7 +55,7 @@ def main():
             model = Architecture(
                 Sequential(
                     Separate(
-                        EncDecConnection("avg", "up_n", (2, 2, 1))(
+                        EncDecConnection("avg", "up_n", (2, 2, 1), cat=True)(
                             ConvBlock([4, 16, 16], actv=LeakyReLU, norm=FoldNorm3d),
                             EncDecConnection("max", "up_n", (2, 2, 1))(
                                 ConvBlock([16, 32, 32], actv=LeakyReLU, norm=FoldNorm3d),
@@ -72,18 +72,18 @@ def main():
                         ),
                         EncDecConnection("avg", "up_n", (4, 4, 1), cat=False)(
                             ConvBlock([4, 16, 16], actv=LeakyReLU, norm=FoldNorm3d),
-                            EncDecConnection("imax", "iunmax", (2, 2, 2), cat=False)(
+                            EncDecConnection("max", "up_n", (2, 2, 2))(
                                 ConvBlock([16, 32, 32], actv=LeakyReLU, norm=FoldNorm3d),
-                                EncDecConnection("imax", "iunmax", (2, 2, 2), cat=False)(
+                                EncDecConnection("max", "up_n", (2, 2, 2))(
                                     ConvBlock([32, 64, 64], actv=LeakyReLU, norm=FoldNorm3d),
-                                    EncDecConnection("imax", "iunmax", (2, 2, 2), cat=False)(
+                                    EncDecConnection("max", "up_n", (2, 2, 2))(
                                         ConvBlock([64, 64, 64], actv=LeakyReLU, norm=FoldNorm3d)
                                     ),
-                                    ConvBlock([64, 64, 64, 32], actv=LeakyReLU, norm=FoldNorm3d, drop=Dropout3d)
+                                    ConvBlock([128, 64, 32], actv=LeakyReLU, norm=FoldNorm3d, drop=Dropout3d)
                                 ),
-                                ConvBlock([32, 32, 32, 16], actv=LeakyReLU, norm=FoldNorm3d, drop=Dropout3d)
+                                ConvBlock([64, 32, 16], actv=LeakyReLU, norm=FoldNorm3d, drop=Dropout3d)
                             ),
-                            ConvBlock([16, 16, 16, 16], actv=LeakyReLU, norm=FoldNorm3d, drop=Dropout3d)
+                            ConvBlock([32, 32, 16], actv=LeakyReLU, norm=FoldNorm3d, drop=Dropout3d)
                         ),
                     ),
                     Cat(),
@@ -133,9 +133,10 @@ def main():
         print("Using model:", repr(model))
         args.arch = model.stream.summary
 
+        clip = (-300 + 100*i, 400)
         train_cases, valid_cases = px.split_trainables(args.sources_path, shuffle=True, offset=i)
 
-        queue = dataset.queue_generator(list(train_cases), 5)
+        queue = dataset.queue_generator(list(train_cases), length=8, clip=clip)
         train_dataset = dataset.GeneratorDataset(
             dataset.debug_slice_gen(None, args.slice_shape) if debug else dataset.train_slice_gen(queue, args),
             buffer_size=args.buffer_size,
@@ -153,7 +154,7 @@ def main():
         else:
             valid_dataset = dataset.GeneratorDataset(
                 ({"case_path": case_path} for case_path in valid_cases),
-                post_func=functools.partial(nibabelio.load, segm=True, clip=(-300, 400))
+                post_func=functools.partial(nibabelio.load, segm=True, clip=clip)
             )
 
         print(f"Training dataset has {len(train_dataset)} elements in buffer.")

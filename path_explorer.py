@@ -136,7 +136,7 @@ def iter_trainable(path: Path) -> Iterator[Path]:
 
 def split_trainables(path: Path, n: int = 10, shuffle=False, offset=0) -> tuple[list[Path], list[Path]]:
     """Lists of case_path for train and valid dataset."""
-    trainables = list(iter_trainable(path))
+    trainables = sorted(list(iter_trainable(path)))
     if offset == "random":
         offset = random.randint(0, min(n-1, len(trainables)))
     if offset:

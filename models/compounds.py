@@ -21,7 +21,7 @@ def build(*args, **kwargs) -> Union[Stream, Structure, None]:
 
 class ConvBlock(Sequential):
     def __new__(cls, channels: list[int], *, kernel_size=(3, 3, 3), stride=(1, 1, 1), actv=None, norm=None, drop=None,
-                momentum: float = 0.9):
+                momentum: float = 0.1):
         kwargs = dict(
             kernel_size=kernel_size,
             stride=stride,
@@ -53,7 +53,7 @@ class ConvBlock(Sequential):
         stride = "_" + "".join(map(str, stride)) if stride != (1, 1, 1) else ""
         channels = list(map(str, channels))
         actv = f" > {actv} > " if actv else " > "
-        norm = " > " + (norm + (f"*{momentum}" if momentum != 0.9 else "")) if norm else ""
+        norm = " > " + (norm + (f"*{momentum}" if momentum != 0.1 else "")) if norm else ""
         drop = " > " + drop if drop else ""
         custom_repr = f"{_type}_{kernel_size}{stride}({actv.join(channels)}{norm}{drop})"
         return Sequential(*layers, custom_repr=custom_repr)

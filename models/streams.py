@@ -242,6 +242,43 @@ class Recall(Stream, nn.Module):
         return wrap(true_positive / ground_truth)
 
 
+class _IRNorm3d(nn.modules.instancenorm._InstanceNorm):
+    def _apply_instance_norm(self, input):
+        if self.training:
+            nn.functional.instance_norm(
+                input, self.running_mean, self.running_var, self.weight, self.bias,
+                True, self.momentum, self.eps)
+        return nn.functional.instance_norm(
+            input, self.running_mean, self.running_var, self.weight, self.bias,
+            False, self.momentum, self.eps)
+
+    def _get_no_batch_dim(self):
+        return 4
+
+    def _check_input_dim(self, input):
+        if input.dim() not in (4, 5):
+            raise ValueError('expected 4D or 5D input (got {}D input)'.format(input.dim()))
+
+class IRNorm3d(Stream, _IRNorm3d):
+    def __init__(self, num_features: int, momentum=0.1, affine=True, track_running_stats=True):
+        super(IRNorm3d, self).__init__(num_features, momentum=momentum, affine=affine, track_running_stats=track_running_stats)
+
+
+class _LIRNorm3d(nn.modules.instancenorm._LazyNormBase, nn.modules.instancenorm._InstanceNorm):
+    cls_to_become = _IRNorm3d  # type: ignore[assignment]
+
+    def _get_no_batch_dim(self):
+        return 4
+
+    def _check_input_dim(self, input):
+        if input.dim() not in (4, 5):
+            raise ValueError('expected 4D or 5D input (got {}D input)'.format(input.dim()))
+
+class LIRNorm3d(Stream, _LIRNorm3d):
+    def __init__(self, momentum=0.1, track_running_stats=True):
+        super(LIRNorm3d, self).__init__(momentum=momentum, track_running_stats=track_running_stats)
+
+
 class SoftPrecision(Stream, nn.Module):
     def __init__(self, dim=1, index=1, num_classes=None):
         super(SoftPrecision, self).__init__()

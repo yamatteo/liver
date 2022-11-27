@@ -27,6 +27,7 @@ def main():
         batch_size=1,
         buffer_increment=1 if debug else 2,
         buffer_size=10 if debug else 40,
+        clip=(-300, 400),
         debug=debug,
         device=torch.device("cpu") if debug else torch.device("cuda:0"),
         epochs=40 if debug else 200,
@@ -43,11 +44,13 @@ def main():
         slice_shape=(64, 64, 8) if debug else (512, 512, 32),
         sources_path=Path('/gpfswork/rech/otc/uiu95bi/sources'),
         turnover_ratio=0.05,
+        zw_height=8 if debug else 32,
     )
     print(f"Run with options: {vars(args)}")
 
     for i in range(args.repetitions):
         args.id = args.group_id + "-" + str(i)
+        args.norm_momentum = 0.9 - i * 0.1
 
         if args.rebuild:
             model = Architecture.rebuild(args.rebuild)
@@ -56,34 +59,34 @@ def main():
                 Sequential(
                     Separate(
                         EncDecConnection("avg", "up_n", (2, 2, 1), cat=True)(
-                            ConvBlock([4, 16, 16], actv=LeakyReLU, norm=FoldNorm3d),
+                            ConvBlock([4, 16, 16], actv=LeakyReLU, norm=IRNorm3d, momentum=args.norm_momentum),
                             EncDecConnection("max", "up_n", (2, 2, 1))(
-                                ConvBlock([16, 32, 32], actv=LeakyReLU, norm=FoldNorm3d),
+                                ConvBlock([16, 32, 32], actv=LeakyReLU, norm=IRNorm3d, momentum=args.norm_momentum),
                                 EncDecConnection("max", "up_n", (2, 2, 2))(
-                                    ConvBlock([32, 64, 64], actv=LeakyReLU, norm=FoldNorm3d),
+                                    ConvBlock([32, 64, 64], actv=LeakyReLU, norm=IRNorm3d, momentum=args.norm_momentum),
                                     EncDecConnection("max", "up_n", (2, 2, 2))(
-                                        ConvBlock([64, 64, 64], actv=LeakyReLU, norm=FoldNorm3d)
+                                        ConvBlock([64, 64, 64], actv=LeakyReLU, norm=IRNorm3d, momentum=args.norm_momentum)
                                     ),
-                                    ConvBlock([128, 64, 32], actv=LeakyReLU, norm=FoldNorm3d, drop=Dropout3d)
+                                    ConvBlock([128, 64, 32], actv=LeakyReLU, norm=IRNorm3d, momentum=args.norm_momentum, drop=Dropout3d)
                                 ),
-                                ConvBlock([64, 32, 16], actv=LeakyReLU, norm=FoldNorm3d, drop=Dropout3d)
+                                ConvBlock([64, 32, 16], actv=LeakyReLU, norm=IRNorm3d, momentum=args.norm_momentum, drop=Dropout3d)
                             ),
-                            ConvBlock([32, 32, 16], actv=LeakyReLU, norm=FoldNorm3d, drop=Dropout3d)
+                            ConvBlock([32, 32, 16], actv=LeakyReLU, norm=IRNorm3d, momentum=args.norm_momentum, drop=Dropout3d)
                         ),
                         EncDecConnection("avg", "up_n", (4, 4, 1), cat=False)(
-                            ConvBlock([4, 16, 16], actv=LeakyReLU, norm=FoldNorm3d),
+                            ConvBlock([4, 16, 16], actv=LeakyReLU, norm=IRNorm3d, momentum=args.norm_momentum),
                             EncDecConnection("max", "up_n", (2, 2, 2))(
-                                ConvBlock([16, 32, 32], actv=LeakyReLU, norm=FoldNorm3d),
+                                ConvBlock([16, 32, 32], actv=LeakyReLU, norm=IRNorm3d, momentum=args.norm_momentum),
                                 EncDecConnection("max", "up_n", (2, 2, 2))(
-                                    ConvBlock([32, 64, 64], actv=LeakyReLU, norm=FoldNorm3d),
+                                    ConvBlock([32, 64, 64], actv=LeakyReLU, norm=IRNorm3d, momentum=args.norm_momentum),
                                     EncDecConnection("max", "up_n", (2, 2, 2))(
-                                        ConvBlock([64, 64, 64], actv=LeakyReLU, norm=FoldNorm3d)
+                                        ConvBlock([64, 64, 64], actv=LeakyReLU, norm=IRNorm3d, momentum=args.norm_momentum)
                                     ),
-                                    ConvBlock([128, 64, 32], actv=LeakyReLU, norm=FoldNorm3d, drop=Dropout3d)
+                                    ConvBlock([128, 64, 32], actv=LeakyReLU, norm=IRNorm3d, momentum=args.norm_momentum, drop=Dropout3d)
                                 ),
-                                ConvBlock([64, 32, 16], actv=LeakyReLU, norm=FoldNorm3d, drop=Dropout3d)
+                                ConvBlock([64, 32, 16], actv=LeakyReLU, norm=IRNorm3d, momentum=args.norm_momentum, drop=Dropout3d)
                             ),
-                            ConvBlock([32, 32, 16], actv=LeakyReLU, norm=FoldNorm3d, drop=Dropout3d)
+                            ConvBlock([32, 32, 16], actv=LeakyReLU, norm=IRNorm3d, momentum=args.norm_momentum, drop=Dropout3d)
                         ),
                     ),
                     Cat(),
@@ -133,10 +136,9 @@ def main():
         print("Using model:", repr(model))
         args.arch = model.stream.summary
 
-        clip = (-300 + 100*i, 400)
         train_cases, valid_cases = px.split_trainables(args.sources_path, shuffle=True, offset=i)
 
-        queue = dataset.queue_generator(list(train_cases), length=8, clip=clip)
+        queue = dataset.queue_generator(list(train_cases), length=8, clip=args.clip)
         train_dataset = dataset.GeneratorDataset(
             dataset.debug_slice_gen(None, args.slice_shape) if debug else dataset.train_slice_gen(queue, args),
             buffer_size=args.buffer_size,
@@ -154,7 +156,7 @@ def main():
         else:
             valid_dataset = dataset.GeneratorDataset(
                 ({"case_path": case_path} for case_path in valid_cases),
-                post_func=functools.partial(nibabelio.load, segm=True, clip=clip)
+                post_func=functools.partial(nibabelio.load, segm=True, clip=args.clip)
             )
 
         print(f"Training dataset has {len(train_dataset)} elements in buffer.")
@@ -177,6 +179,12 @@ def main():
             queue.send(True)
         except Exception as err:
             print(err)
+        if not debug:
+            global_dataset = dataset.GeneratorDataset(
+                    ({"case_path": case_path} for case_path in sorted(px.iter_trainable(args.source_path))),
+                    post_func=functools.partial(nibabelio.load, segm=True, clip=args.clip)
+                )
+            validation_round(model, metrics=metrics, ds=global_dataset, epoch=args.epochs, args=args)
 
 
 def train_epoch(model: Architecture, *, loss: Architecture, ds: dataset.GeneratorDataset, epoch, optimizer, args):
@@ -213,10 +221,12 @@ def validation_round(model: Architecture, *, metrics: Architecture, ds: dataset.
         name = data.get("name", ["no name"])[0]  # 0 as in 'the name of the first (unique) case in the batch'
         scan = data["scan"]
         segm = data["segm"]
-        apply(model, data, args.slice_shape)
+        apply(model, data, args.slice_shape, args=args)
         pred = data["pred"]
         _metrics = metrics.forward(dict(data, pred=pred))
-        scores.append(dict(_metrics, name=name))
+        zw_start = data["zw_start"]
+        window_coverage = (segm[..., zw_start:zw_start+args.zw_height] > 0).sum() / (1+(segm > 0).sum())
+        scores.append(dict(_metrics, name=name, zw_start=zw_start, coverage=window_coverage))
         # segm = torch.as_tensor(segm, device=pred.device).clamp(0, 1)
         # recall = losses(dict(pred=pred, segm=segm)).get("recall").item()
         # intersection = torch.sum(pred * segm).item() + 0.1
@@ -232,7 +242,13 @@ def validation_round(model: Architecture, *, metrics: Architecture, ds: dataset.
         name = score["name"]
         jaccard = score["jaccard"]
         recall = score["recall"]
-        print(f"{name:>12}:{100 * jaccard:6.1f}% jaccard --- {100 * recall:6.1f}% recall")
+        zw_start, coverage = score["zw_start"], score["coverage"]
+        print(
+            f"{name:>12}:"
+            f"{100 * jaccard:6.1f}% jaccard"
+            f"{100 * recall:6.1f}% recall"
+            f"{100 * coverage:6.1f}% coverage starting at {zw_start}"
+        )
     total_time = time.time() - args.start_time
     mean_time = total_time / max(1, epoch)
     print(f"Mean time: {mean_time:.0f}s per training epoch.")
@@ -266,7 +282,7 @@ def train(model: Architecture, *, loss: Architecture, metrics: Architecture, tds
     report.append({})
 
 
-def apply(model, items: dict, slice_shape: tuple[int, ...]) -> dict:
+def apply(model, items: dict, slice_shape: tuple[int, ...], args) -> dict:
     input_names = tuple(input__.name for input__ in model.inputs)
     inputs = tuple(input__(items).cpu().numpy() for input__ in model.inputs)
     height = inputs[0].shape[-1]
@@ -285,6 +301,9 @@ def apply(model, items: dict, slice_shape: tuple[int, ...]) -> dict:
         except KeyError:
             for output in model.outputs:
                 items[output] = piece_items[output]
+    profile = torch.sum(items["pred"], dim=(0, 2, 3))[1]
+    items["zw_start"] = max(range(len(profile)), key=lambda i: (profile[i:i+args.zw_height]).sum().item())
+
     return items
 
 if __name__=="__main__":

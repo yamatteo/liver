@@ -171,6 +171,12 @@ def main():
         args.start_time = time.time()
         try:
             train(model, loss=loss, metrics=metrics, tds=train_dataset, vds=valid_dataset, args=args)
+            if not debug:
+                global_dataset = dataset.GeneratorDataset(
+                    ({"case_path": args.sources_path / case_path} for case_path in sorted(px.iter_trainable(args.sources_path))),
+                    post_func=functools.partial(nibabelio.load, segm=True, clip=args.clip)
+                )
+                validation_round(model, metrics=metrics, ds=global_dataset, epoch=args.epochs, args=args)
         finally:
             del train_dataset, valid_dataset
             run.finish()
@@ -179,12 +185,6 @@ def main():
             queue.send(True)
         except Exception as err:
             print(err)
-        if not debug:
-            global_dataset = dataset.GeneratorDataset(
-                    ({"case_path": args.sources_path / case_path} for case_path in sorted(px.iter_trainable(args.sources_path))),
-                    post_func=functools.partial(nibabelio.load, segm=True, clip=args.clip)
-                )
-            validation_round(model, metrics=metrics, ds=global_dataset, epoch=args.epochs, args=args)
 
 
 def train_epoch(model: Architecture, *, loss: Architecture, ds: dataset.GeneratorDataset, epoch, optimizer, args):
@@ -225,11 +225,11 @@ def validation_round(model: Architecture, *, metrics: Architecture, ds: dataset.
         pred = data["pred"]
         _metrics = metrics.forward(dict(data, pred=pred))
         zw_start = data["zw_start"]
-        print(f"Case {name}. Window [..., {zw_start}:{zw_start+args.zw_height}]")
-        print(
-            f"Positives: {(segm[..., zw_start:zw_start+args.zw_height] > 0).sum().item()}.",
-            F"Total: {(1+(segm > 0).sum()).item()}."
-        )
+        # print(f"Case {name}. Window [..., {zw_start}:{zw_start+args.zw_height}]")
+        # print(
+        #     f"Positives: {(segm[..., zw_start:zw_start+args.zw_height] > 0).sum().item()}.",
+        #     F"Total: {(1+(segm > 0).sum()).item()}."
+        # )
         window_coverage = (segm[..., zw_start:zw_start+args.zw_height] > 0).sum() / (1+(segm > 0).sum())
         scores.append(dict(_metrics, name=name, zw_start=zw_start, coverage=window_coverage))
         # segm = torch.as_tensor(segm, device=pred.device).clamp(0, 1)

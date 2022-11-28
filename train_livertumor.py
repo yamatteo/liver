@@ -40,7 +40,7 @@ def main():
         n_samples=4,
         rebuild=False,
         norm_momentum=0.9,
-        repetitions=1 if debug else 4,
+        repetitions=1 if debug else 5,
         slice_shape=(64, 64, 8) if debug else (512, 512, 32),
         sources_path=Path('/gpfswork/rech/otc/uiu95bi/sources'),
         turnover_ratio=0.05,
@@ -50,7 +50,7 @@ def main():
 
     for i in range(args.repetitions):
         args.id = args.group_id + "-" + str(i)
-        args.norm_momentum = 0.9 - i * 0.1
+        args.norm_momentum = 0.9 - i * 0.2
 
         if args.rebuild:
             model = Architecture.rebuild(args.rebuild)
@@ -181,7 +181,7 @@ def main():
             print(err)
         if not debug:
             global_dataset = dataset.GeneratorDataset(
-                    ({"case_path": case_path} for case_path in sorted(px.iter_trainable(args.source_path))),
+                    ({"case_path": case_path} for case_path in sorted(px.iter_trainable(args.sources_path))),
                     post_func=functools.partial(nibabelio.load, segm=True, clip=args.clip)
                 )
             validation_round(model, metrics=metrics, ds=global_dataset, epoch=args.epochs, args=args)
@@ -225,6 +225,11 @@ def validation_round(model: Architecture, *, metrics: Architecture, ds: dataset.
         pred = data["pred"]
         _metrics = metrics.forward(dict(data, pred=pred))
         zw_start = data["zw_start"]
+        print(f"Case {name}. Window [..., {zw_start}:{zw_start+args.zw_height}]")
+        print(
+            f"Positives: {(segm[..., zw_start:zw_start+args.zw_height] > 0).sum().item()}.",
+            F"Total: {(1+(segm > 0).sum()).item()}."
+        )
         window_coverage = (segm[..., zw_start:zw_start+args.zw_height] > 0).sum() / (1+(segm > 0).sum())
         scores.append(dict(_metrics, name=name, zw_start=zw_start, coverage=window_coverage))
         # segm = torch.as_tensor(segm, device=pred.device).clamp(0, 1)

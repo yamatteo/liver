@@ -181,7 +181,7 @@ def main():
             print(err)
         if not debug:
             global_dataset = dataset.GeneratorDataset(
-                    ({"case_path": case_path} for case_path in sorted(px.iter_trainable(args.sources_path))),
+                    ({"case_path": args.sources_path / case_path} for case_path in sorted(px.iter_trainable(args.sources_path))),
                     post_func=functools.partial(nibabelio.load, segm=True, clip=args.clip)
                 )
             validation_round(model, metrics=metrics, ds=global_dataset, epoch=args.epochs, args=args)
@@ -306,7 +306,8 @@ def apply(model, items: dict, slice_shape: tuple[int, ...], args) -> dict:
         except KeyError:
             for output in model.outputs:
                 items[output] = piece_items[output]
-    profile = torch.sum(items["pred"], dim=(0, 2, 3))[1]
+    profile = (torch.argmax(items["pred"], dim=1) == 1).sum(dim=(0, 1, 2))
+    # profile = torch.sum(items["pred"], dim=(0, 2, 3))[1]
     items["zw_start"] = max(range(len(profile)), key=lambda i: (profile[i:i+args.zw_height]).sum().item())
 
     return items

@@ -39,8 +39,8 @@ def main():
         models_path=Path("../saved_models") if debug else Path('/gpfswork/rech/otc/uiu95bi/saved_models'),
         n_samples=4,
         rebuild=False,
-        norm_momentum=0.9,
-        repetitions=1 if debug else 5,
+        norm_momentum=0.1,
+        repetitions=1 if debug else 1,
         slice_shape=(64, 64, 8) if debug else (512, 512, 32),
         sources_path=Path('/gpfswork/rech/otc/uiu95bi/sources'),
         turnover_ratio=0.05,
@@ -50,7 +50,7 @@ def main():
 
     for i in range(args.repetitions):
         args.id = args.group_id + "-" + str(i)
-        args.norm_momentum = 0.9 - i * 0.2
+        args.norm_momentum = 0.2
 
         if args.rebuild:
             model = Architecture.rebuild(args.rebuild)
@@ -171,12 +171,12 @@ def main():
         args.start_time = time.time()
         try:
             train(model, loss=loss, metrics=metrics, tds=train_dataset, vds=valid_dataset, args=args)
-            if not debug:
-                global_dataset = dataset.GeneratorDataset(
-                    ({"case_path": args.sources_path / case_path} for case_path in sorted(px.iter_trainable(args.sources_path))),
-                    post_func=functools.partial(nibabelio.load, segm=True, clip=args.clip)
-                )
-                validation_round(model, metrics=metrics, ds=global_dataset, epoch=args.epochs, args=args)
+            # if not debug:
+            #     global_dataset = dataset.GeneratorDataset(
+            #         ({"case_path": args.sources_path / case_path} for case_path in sorted(px.iter_trainable(args.sources_path))),
+            #         post_func=functools.partial(nibabelio.load, segm=True, clip=args.clip)
+            #     )
+            #     validation_round(model, metrics=metrics, ds=global_dataset, epoch=args.epochs, args=args)
         finally:
             del train_dataset, valid_dataset
             run.finish()
@@ -282,6 +282,8 @@ def train(model: Architecture, *, loss: Architecture, metrics: Architecture, tds
             model.stream.eval()
             validation_round(model, metrics=metrics, ds=vds, epoch=epoch + 1, args=args)
             model.save()
+            args.norm_momentum = 0.5 * (0.05 + args.norm_momentum)
+            model.stream.apply(set_norm(args.norm_momentum))
             tds.buffer_size += args.buffer_increment
             args.grad_accumulation_steps = (tds.buffer_size + 3) // 4
     report.append({})
@@ -311,6 +313,13 @@ def apply(model, items: dict, slice_shape: tuple[int, ...], args) -> dict:
     items["zw_start"] = max(range(len(profile)), key=lambda i: (profile[i:i+args.zw_height]).sum().item())
 
     return items
+
+def set_norm(norm):
+    def _set_norm(module):
+        if isinstance(module, (BatchNorm3d, InstanceNorm3d, IRNorm3d)):
+            module.momentum = norm
+    return _set_norm
+
 
 if __name__=="__main__":
     main()

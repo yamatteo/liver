@@ -30,7 +30,7 @@ def main():
         clip=(-300, 400),
         debug=debug,
         device=torch.device("cpu") if debug else torch.device("cuda:0"),
-        epochs=40 if debug else 200,
+        epochs=40 if debug else 400,
         finals=2,
         fold_shape=(4, 4, 2) if debug else (16, 16, 8),
         grad_accumulation_steps=10,
@@ -39,8 +39,8 @@ def main():
         models_path=Path("../saved_models") if debug else Path('/gpfswork/rech/otc/uiu95bi/saved_models'),
         n_samples=4,
         rebuild=False,
-        norm_momentum=0.1,
-        repetitions=1 if debug else 1,
+        norm_momentum=0.01,
+        repetitions=1 if debug else 2,
         slice_shape=(64, 64, 8) if debug else (512, 512, 32),
         sources_path=Path('/gpfswork/rech/otc/uiu95bi/sources'),
         turnover_ratio=0.05,
@@ -50,7 +50,7 @@ def main():
 
     for i in range(args.repetitions):
         args.id = args.group_id + "-" + str(i)
-        args.norm_momentum = 0.2
+        args.norm_momentum = 0.3
 
         if args.rebuild:
             model = Architecture.rebuild(args.rebuild)
@@ -282,7 +282,7 @@ def train(model: Architecture, *, loss: Architecture, metrics: Architecture, tds
             model.stream.eval()
             validation_round(model, metrics=metrics, ds=vds, epoch=epoch + 1, args=args)
             model.save()
-            args.norm_momentum = 0.5 * (0.05 + args.norm_momentum)
+            args.norm_momentum = 0.4 * 0.01 + 0.6 * args.norm_momentum
             model.stream.apply(set_norm(args.norm_momentum))
             tds.buffer_size += args.buffer_increment
             args.grad_accumulation_steps = (tds.buffer_size + 3) // 4

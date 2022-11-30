@@ -61,6 +61,11 @@ class AvgPool3d(Stream, nn.AvgPool3d):
         super(AvgPool3d, self).__init__(kernel_size=kernel_size)
 
 
+class BatchNorm3d(Stream, nn.BatchNorm3d):
+    def __init__(self, num_features, momentum=0.1):
+        super(BatchNorm3d, self).__init__(num_features, momentum=momentum)
+
+
 class Cat(Stream, nn.Module):
     def __init__(self, dim=1):
         super(Cat, self).__init__()

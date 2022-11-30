@@ -9,7 +9,6 @@ import torch
 import rich
 from adabelief_pytorch import AdaBelief
 from rich import print
-from torch.nn import *
 from torch.utils.data import DataLoader
 
 import dataset
@@ -18,6 +17,7 @@ import path_explorer as px
 import report
 import slicing
 from models import *
+from models import BatchNorm3d
 
 debug = not torch.cuda.is_available()
 rich.reconfigure(width=180)
@@ -39,8 +39,8 @@ def main():
         models_path=Path("../saved_models") if debug else Path('/gpfswork/rech/otc/uiu95bi/saved_models'),
         n_samples=4,
         rebuild=False,
-        norm_momentum=0.01,
-        repetitions=1 if debug else 2,
+        norm_momentum=0.1,
+        repetitions=1 if debug else 4,
         slice_shape=(64, 64, 8) if debug else (512, 512, 32),
         sources_path=Path('/gpfswork/rech/otc/uiu95bi/sources'),
         turnover_ratio=0.05,
@@ -50,7 +50,7 @@ def main():
 
     for i in range(args.repetitions):
         args.id = args.group_id + "-" + str(i)
-        args.norm_momentum = 0.3
+        args.norm_momentum = 0.1 - 0.02*i
 
         if args.rebuild:
             model = Architecture.rebuild(args.rebuild)
@@ -59,34 +59,34 @@ def main():
                 Sequential(
                     Separate(
                         EncDecConnection("avg", "up_n", (2, 2, 1), cat=True)(
-                            ConvBlock([4, 16, 16], actv=LeakyReLU, norm=IRNorm3d, momentum=args.norm_momentum),
+                            ConvBlock([4, 16, 16], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum),
                             EncDecConnection("max", "up_n", (2, 2, 1))(
-                                ConvBlock([16, 32, 32], actv=LeakyReLU, norm=IRNorm3d, momentum=args.norm_momentum),
+                                ConvBlock([16, 32, 32], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum),
                                 EncDecConnection("max", "up_n", (2, 2, 2))(
-                                    ConvBlock([32, 64, 64], actv=LeakyReLU, norm=IRNorm3d, momentum=args.norm_momentum),
+                                    ConvBlock([32, 64, 64], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum),
                                     EncDecConnection("max", "up_n", (2, 2, 2))(
-                                        ConvBlock([64, 64, 64], actv=LeakyReLU, norm=IRNorm3d, momentum=args.norm_momentum)
+                                        ConvBlock([64, 64, 64], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum)
                                     ),
-                                    ConvBlock([128, 64, 32], actv=LeakyReLU, norm=IRNorm3d, momentum=args.norm_momentum, drop=Dropout3d)
+                                    ConvBlock([128, 64, 32], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum, drop=Dropout3d)
                                 ),
-                                ConvBlock([64, 32, 16], actv=LeakyReLU, norm=IRNorm3d, momentum=args.norm_momentum, drop=Dropout3d)
+                                ConvBlock([64, 32, 16], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum, drop=Dropout3d)
                             ),
-                            ConvBlock([32, 32, 16], actv=LeakyReLU, norm=IRNorm3d, momentum=args.norm_momentum, drop=Dropout3d)
+                            ConvBlock([32, 32, 16], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum, drop=Dropout3d)
                         ),
                         EncDecConnection("avg", "up_n", (4, 4, 1), cat=False)(
-                            ConvBlock([4, 16, 16], actv=LeakyReLU, norm=IRNorm3d, momentum=args.norm_momentum),
+                            ConvBlock([4, 16, 16], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum),
                             EncDecConnection("max", "up_n", (2, 2, 2))(
-                                ConvBlock([16, 32, 32], actv=LeakyReLU, norm=IRNorm3d, momentum=args.norm_momentum),
+                                ConvBlock([16, 32, 32], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum),
                                 EncDecConnection("max", "up_n", (2, 2, 2))(
-                                    ConvBlock([32, 64, 64], actv=LeakyReLU, norm=IRNorm3d, momentum=args.norm_momentum),
+                                    ConvBlock([32, 64, 64], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum),
                                     EncDecConnection("max", "up_n", (2, 2, 2))(
-                                        ConvBlock([64, 64, 64], actv=LeakyReLU, norm=IRNorm3d, momentum=args.norm_momentum)
+                                        ConvBlock([64, 64, 64], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum)
                                     ),
-                                    ConvBlock([128, 64, 32], actv=LeakyReLU, norm=IRNorm3d, momentum=args.norm_momentum, drop=Dropout3d)
+                                    ConvBlock([128, 64, 32], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum, drop=Dropout3d)
                                 ),
-                                ConvBlock([64, 32, 16], actv=LeakyReLU, norm=IRNorm3d, momentum=args.norm_momentum, drop=Dropout3d)
+                                ConvBlock([64, 32, 16], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum, drop=Dropout3d)
                             ),
-                            ConvBlock([32, 32, 16], actv=LeakyReLU, norm=IRNorm3d, momentum=args.norm_momentum, drop=Dropout3d)
+                            ConvBlock([32, 32, 16], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum, drop=Dropout3d)
                         ),
                     ),
                     Cat(),

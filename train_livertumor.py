@@ -22,6 +22,7 @@ from models import BatchNorm3d
 debug = not torch.cuda.is_available()
 rich.reconfigure(width=180)
 
+
 def main():
     args = SimpleNamespace(
         batch_size=1,
@@ -38,12 +39,14 @@ def main():
         lr=0.002,
         models_path=Path("../saved_models") if debug else Path('/gpfswork/rech/otc/uiu95bi/saved_models'),
         n_samples=4,
-        rebuild=False,
+        rebuild="LiverTumorD45477-0.pt",
         norm_momentum=0.1,
         repetitions=1 if debug else 4,
         slice_shape=(64, 64, 8) if debug else (512, 512, 32),
         sources_path=Path('/gpfswork/rech/otc/uiu95bi/sources'),
         turnover_ratio=0.05,
+        xw_height=16 if debug else 256,
+        yw_height=16 if debug else 256,
         zw_height=8 if debug else 32,
     )
     print(f"Run with options: {vars(args)}")
@@ -53,7 +56,7 @@ def main():
         args.norm_momentum = 0.1 - 0.02*i
 
         if args.rebuild:
-            model = Architecture.rebuild(args.rebuild)
+            model = Architecture.rebuild(args.models_path / args.rebuild)
         else:
             model = Architecture(
                 Sequential(
@@ -63,34 +66,44 @@ def main():
                             EncDecConnection("max", "up_n", (2, 2, 1))(
                                 ConvBlock([16, 32, 32], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum),
                                 EncDecConnection("max", "up_n", (2, 2, 2))(
-                                    ConvBlock([32, 64, 64], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum),
+                                    ConvBlock([32, 64, 64], actv=LeakyReLU, norm=BatchNorm3d,
+                                              momentum=args.norm_momentum),
                                     EncDecConnection("max", "up_n", (2, 2, 2))(
-                                        ConvBlock([64, 64, 64], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum)
+                                        ConvBlock([64, 64, 64], actv=LeakyReLU, norm=BatchNorm3d,
+                                                  momentum=args.norm_momentum)
                                     ),
-                                    ConvBlock([128, 64, 32], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum, drop=Dropout3d)
+                                    ConvBlock([128, 64, 32], actv=LeakyReLU, norm=BatchNorm3d,
+                                              momentum=args.norm_momentum, drop=Dropout3d)
                                 ),
-                                ConvBlock([64, 32, 16], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum, drop=Dropout3d)
+                                ConvBlock([64, 32, 16], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum,
+                                          drop=Dropout3d)
                             ),
-                            ConvBlock([32, 32, 16], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum, drop=Dropout3d)
+                            ConvBlock([32, 32, 16], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum,
+                                      drop=Dropout3d)
                         ),
                         EncDecConnection("avg", "up_n", (4, 4, 1), cat=False)(
                             ConvBlock([4, 16, 16], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum),
                             EncDecConnection("max", "up_n", (2, 2, 2))(
                                 ConvBlock([16, 32, 32], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum),
                                 EncDecConnection("max", "up_n", (2, 2, 2))(
-                                    ConvBlock([32, 64, 64], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum),
+                                    ConvBlock([32, 64, 64], actv=LeakyReLU, norm=BatchNorm3d,
+                                              momentum=args.norm_momentum),
                                     EncDecConnection("max", "up_n", (2, 2, 2))(
-                                        ConvBlock([64, 64, 64], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum)
+                                        ConvBlock([64, 64, 64], actv=LeakyReLU, norm=BatchNorm3d,
+                                                  momentum=args.norm_momentum)
                                     ),
-                                    ConvBlock([128, 64, 32], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum, drop=Dropout3d)
+                                    ConvBlock([128, 64, 32], actv=LeakyReLU, norm=BatchNorm3d,
+                                              momentum=args.norm_momentum, drop=Dropout3d)
                                 ),
-                                ConvBlock([64, 32, 16], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum, drop=Dropout3d)
+                                ConvBlock([64, 32, 16], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum,
+                                          drop=Dropout3d)
                             ),
-                            ConvBlock([32, 32, 16], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum, drop=Dropout3d)
+                            ConvBlock([32, 32, 16], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum,
+                                      drop=Dropout3d)
                         ),
                     ),
                     Cat(),
-                    ConvBlock([4+16+16, 32, 16, 2], kernel_size=(1, 1, 1), actv=LeakyReLU),
+                    ConvBlock([4 + 16 + 16, 32, 16, 2], kernel_size=(1, 1, 1), actv=LeakyReLU),
                 ),
                 inputs=[("scan", torch.float32)],
                 outputs=["pred"],
@@ -224,14 +237,26 @@ def validation_round(model: Architecture, *, metrics: Architecture, ds: dataset.
         apply(model, data, args.slice_shape, args=args)
         pred = data["pred"]
         _metrics = metrics.forward(dict(data, pred=pred))
+        xw_start = data["xw_start"]
+        yw_start = data["yw_start"]
         zw_start = data["zw_start"]
         # print(f"Case {name}. Window [..., {zw_start}:{zw_start+args.zw_height}]")
         # print(
         #     f"Positives: {(segm[..., zw_start:zw_start+args.zw_height] > 0).sum().item()}.",
         #     F"Total: {(1+(segm > 0).sum()).item()}."
         # )
-        window_coverage = (segm[..., zw_start:zw_start+args.zw_height] > 0).sum() / (1+(segm > 0).sum())
-        scores.append(dict(_metrics, name=name, zw_start=zw_start, coverage=window_coverage))
+        liver_coverage = (1 + (segm[...,
+                               xw_start:xw_start + args.xw_height,
+                               yw_start:yw_start + args.yw_height,
+                               zw_start:zw_start + args.zw_height
+                               ] == 1).sum()) / (1 + (segm == 1).sum())
+        tumor_coverage = (1 + (segm[...,
+                               xw_start:xw_start + args.xw_height,
+                               yw_start:yw_start + args.yw_height,
+                               zw_start:zw_start + args.zw_height
+                               ] == 2).sum()) / (1 + (segm == 2).sum())
+        scores.append(dict(_metrics, name=name, xw_start=xw_start, yw_start=yw_start, zw_start=zw_start,
+                           liver_coverage=liver_coverage, tumor_coverage=tumor_coverage))
         # segm = torch.as_tensor(segm, device=pred.device).clamp(0, 1)
         # recall = losses(dict(pred=pred, segm=segm)).get("recall").item()
         # intersection = torch.sum(pred * segm).item() + 0.1
@@ -247,12 +272,13 @@ def validation_round(model: Architecture, *, metrics: Architecture, ds: dataset.
         name = score["name"]
         jaccard = score["jaccard"]
         recall = score["recall"]
-        zw_start, coverage = score["zw_start"], score["coverage"]
+        coverage = score["liver_coverage"]
         print(
             f"{name:>12}:"
             f"{100 * jaccard:6.1f}% jaccard"
             f"{100 * recall:6.1f}% recall"
-            f"{100 * coverage:6.1f}% coverage starting at {zw_start}"
+            f"{100 * score['liver_coverage']:6.1f}% - {100 * score['tumor_coverage']:.1f}% coverage "
+            f"starting at {(score['xw_start'], score['yw_start'], score['zw_start'])}"
         )
     total_time = time.time() - args.start_time
     mean_time = total_time / max(1, epoch)
@@ -275,6 +301,7 @@ def train(model: Architecture, *, loss: Architecture, metrics: Architecture, tds
     )
     model.stream.eval()
     validation_round(model, metrics=metrics, ds=vds, epoch=0, args=args)
+    model.stream.apply(set_norm(args.norm_momentum))
     for epoch in range(args.epochs):
         model.stream.train()
         train_epoch(model, loss=loss, ds=tds, epoch=epoch, optimizer=optimizer, args=args)
@@ -282,8 +309,8 @@ def train(model: Architecture, *, loss: Architecture, metrics: Architecture, tds
             model.stream.eval()
             validation_round(model, metrics=metrics, ds=vds, epoch=epoch + 1, args=args)
             model.save()
-            args.norm_momentum = 0.4 * 0.01 + 0.6 * args.norm_momentum
-            model.stream.apply(set_norm(args.norm_momentum))
+            # args.norm_momentum = 0.4 * 0.01 + 0.6 * args.norm_momentum
+            # model.stream.apply(set_norm(args.norm_momentum))
             tds.buffer_size += args.buffer_increment
             args.grad_accumulation_steps = (tds.buffer_size + 3) // 4
     report.append({})
@@ -309,17 +336,25 @@ def apply(model, items: dict, slice_shape: tuple[int, ...], args) -> dict:
             for output in model.outputs:
                 items[output] = piece_items[output]
     profile = (torch.argmax(items["pred"], dim=1) == 1).sum(dim=(0, 1, 2))
-    # profile = torch.sum(items["pred"], dim=(0, 2, 3))[1]
-    items["zw_start"] = max(range(len(profile)), key=lambda i: (profile[i:i+args.zw_height]).sum().item())
+    items["zw_start"] = z = max(range(len(profile)), key=lambda i: (profile[i:i + args.zw_height]).sum().item())
+    profile = (torch.argmax(items["pred"], dim=1)[..., z:z + args.zw_height] == 1).sum(dim=(0, 1, 3))
+    items["yw_start"] = y = max(range(len(profile) - args.yw_height),
+                                key=lambda i: (profile[i:i + args.yw_height]).sum().item())
+    profile = (torch.argmax(items["pred"], dim=1)[..., y:y + args.yw_height, z:z + args.zw_height] == 1).sum(
+        dim=(0, 2, 3))
+    items["xw_start"] = x = max(range(len(profile) - args.xw_height),
+                                key=lambda i: (profile[i:i + args.xw_height]).sum().item())
 
     return items
+
 
 def set_norm(norm):
     def _set_norm(module):
         if isinstance(module, (BatchNorm3d, InstanceNorm3d, IRNorm3d)):
             module.momentum = norm
+
     return _set_norm
 
 
-if __name__=="__main__":
+if __name__ == "__main__":
     main()

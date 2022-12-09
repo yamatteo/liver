@@ -183,3 +183,16 @@ def debug_slice_gen(_, shape):
             scan=t,
             segm=(np.abs(t).sum(axis=0) / np.max(np.abs(t).sum(axis=0)) + 0.49).astype(np.int64),
         )
+
+def classifier_gen(queue, premodel, args):
+    from .train_livertumor import apply
+    for bundle_dict in queue:
+        bundle_dict = apply(premodel, bundle_dict, args.slice_shape, args)
+
+        x, y, z = bundle_dict["xw_start"], bundle_dict["yw_start"], bundle_dict["zw_start"]
+        xl, yl, zl = 256, 256, 32
+        yield dict(
+            wscan = bundle_dict["scan"][:, x:x+xl, y:y+yl, z:z+zl],
+            mvi = torch.tensor(hercules.getrow(bundle_dict["name"])["mvi"], dtype=torch.int64)
+        )
+

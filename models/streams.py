@@ -137,6 +137,14 @@ class Expression(Stream, nn.Module):
     def forward(self, *args: Tensor) -> tuple[Tensor, ...]:
         return wrap(eval(self.expression))  # Returns a tuple of Tensor
 
+class Flatten(Stream, nn.Module):
+    def __init__(self, start_dim = 1):
+        super(Flatten, self).__init__()
+        self.start_dim = start_dim
+
+    def forward(self, *args: Tensor) -> tuple[Tensor, ...]:
+        return wrap(torch.flatten(a, start_dim=self.start_dim) for a in args)
+
 
 class _FoldNorm3d(nn.BatchNorm3d):
     def __init__(self, num_features, *, folded_shape, momentum):
@@ -203,6 +211,10 @@ class Jaccard(Stream, nn.Module):
 class LeakyReLU(Stream, nn.LeakyReLU):
     pass
 
+
+class Linear(Stream, nn.Linear):
+    def __init__(self, in_features, out_features):
+        super(Linear, self).__init__(in_features=in_features, out_features=out_features)
 
 class MaskOf(Stream, nn.Module):
     def __init__(self, index):

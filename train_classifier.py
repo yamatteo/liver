@@ -174,6 +174,7 @@ def prepare_dataset(args):
         print("Name:", bundle["name"])
         row = hercoles.loc[hercoles['ID_Paziente'] == bundle["name"]]
         print(f"Database row (len {len(row)}):", row)
+        print("MVI:", hercoles.loc[hercoles['ID_Paziente'] == bundle["name"]]["MVI"])
         if len(row)!=1:
             continue
         bundle = apply(
@@ -189,7 +190,7 @@ def prepare_dataset(args):
             dict(
                 name=bundle["name"],
                 wscan=bundle["scan"][:, x:x + xl, y:y + yl, z:z + zl],
-                mvi=torch.tensor(hercoles.loc[hercoles['ID_Paziente'] == bundle["name"]]["MVI"], dtype=torch.int64)
+                mvi=torch.tensor(hercoles.loc[hercoles['ID_Paziente'] == bundle["name"]]["MVI"].to_numpy(), dtype=torch.int64)
             ),
             f"{args.preds_path / (bundle['name'] + '.pt')}"
         )

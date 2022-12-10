@@ -95,8 +95,8 @@ class Architecture:
         return items
 
     @classmethod
-    def rebuild(cls, storage):
-        data = torch.load(storage)
+    def rebuild(cls, storage, device):
+        data = torch.load(storage, map_location=device)
         arch = data["arch"]
         arch["stream"] = Structure.rebuild(arch["stream"])
         return cls(**arch)

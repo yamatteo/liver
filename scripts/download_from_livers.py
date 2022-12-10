@@ -2,12 +2,16 @@ import argparse
 from pathlib import Path
 
 import httplib2
+import sys
 
-import frontend.pydrive_utils as pu
+sys.path.append(str(Path(__file__).parent.parent))
+sys.path.append(str(Path(__file__).parent.parent.parent))
+print(sys.path)
+import frontend_liver.pydrive_utils as pu
 import path_explorer as px
 
 def main():
-    root = pu.DrivePath([], root="1N5UQx2dqvWy1d6ve1TEgEFthE8tEApxq").resolve()
+    pu.connect()
 
     parser = argparse.ArgumentParser(description='Rename folders')
     parser.add_argument("--sources", type=str, default="sources", help="where sources are stored on LIVERS")
@@ -15,37 +19,31 @@ def main():
     parser.add_argument("--overwrite", action="store_true", default=False)
     args = parser.parse_args()
 
+    root = pu.DrivePath([], root="1N5UQx2dqvWy1d6ve1TEgEFthE8tEApxq")
     sources = root / args.sources
     target = args.target
     for case in pu.iter_registered(sources):
-        print(case)
         # if str(case)[0:3] == "Hum":
         #     new_name = f"HE016-{str(case)[3:6]}"
         # print("Considering", target / new_name)
-        # target_case = (target / new_name).mkdir()
-        # existing_files = [ file.name for file in target_case.iterdir()]
-        # for filename in ["segmentation.nii.gz", "registration_data.pickle", *[f"registered_phase_{ph}.nii.gz" for ph in "bavt"]]:
-        #     source_file = sources/case/filename
-        #     target_file = target_case/filename
-        #     if not source_file.exists():
-        #         print(" ", source_file, "do not exists")
-        #         continue
-        #     if target_file.name not in existing_files:
-        #         f = pu.drive.CreateFile(dict(title=source_file.name, parents=[{"id": target_case.id}]))
-        #         print("  Uploading", source_file.name)
-        #     elif args.overwrite:
-        #         f = pu.drive.CreateFile(
-        #             dict(id=target_file.id, title=source_file.name, parents=[{"id": target_case.id}])
-        #         )
-        #         print("  Overwriting", source_file.name)
-        #     else:
-        #         print("  File", source_file.name, "already there.")
-        #         continue
-        #     f.SetContentFile(str(source_file))
-        #     try:
-        #         f.Upload()
-        #     except httplib2.error.RedirectMissingLocation:
-        #         print("Error while uploading: RedirectMissingLocation")
+        source_case: pu.DrivePath = sources/case
+        target_case = target / case.name
+        target_case.mkdir(exist_ok=True)
+        existing_files = [ file.name for file in target_case.iterdir()]
+        print(case, ">>", target_case)
+        for source_file in source_case.iterdir():
+            target_file = target_case/source_file.name
+            if not source_file.exists():
+                print(" ", source_file, "do not exists")
+                continue
+            if target_file.name not in existing_files:
+                print("  Downloading", source_file.name)
+            elif args.overwrite:
+                print("  Overwriting", source_file.name)
+            else:
+                print("  File", source_file.name, "already there.")
+                continue
+            source_file.obj.GetContentFile(target_file)
 
 
 

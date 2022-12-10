@@ -170,15 +170,21 @@ def prepare_dataset(args):
     premodel = Architecture.rebuild(args.models_path / args.rebuild, device=args.device)
     premodel.stream.eval()
     for case_path in px.iter_registered(args.sources_path):
+        bundle = nibabelio.load(args.sources_path / case_path, segm=False, clip=args.clip)
+        print("Name:", bundle["name"])
+        row = hercoles.loc[hercoles['ID_Paziente'] == bundle["name"]]
+        print(f"Database row (len {len(row)}):", row)
+        if len(row)!=1:
+            continue
         bundle = apply(
             premodel,
-            nibabelio.load(args.sources_path / case_path, segm=False, clip=args.clip),
+            bundle,
             args.slice_shape,
             args
         )
         x, y, z = bundle["xw_start"], bundle["yw_start"], bundle["zw_start"]
         xl, yl, zl = 256, 256, 32
-        print("Name:", bundle["name"])
+        
         torch.save(
             dict(
                 name=bundle["name"],

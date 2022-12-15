@@ -34,7 +34,7 @@ def main():
         clip=(-300, 400),
         debug=debug,
         device=torch.device("cpu") if debug else torch.device("cuda:0"),
-        epochs=40 if debug else 400,
+        epochs=40 if debug else 100,
         # finals=2,
         # fold_shape=(4, 4, 2) if debug else (16, 16, 8),
         grad_accumulation_steps=10,
@@ -43,7 +43,7 @@ def main():
         models_path=Path('/gpfswork/rech/otc/uiu95bi/saved_models'),
         # n_samples=4,
         rebuild="LiverTumorD45477-0.pt",
-        # norm_momentum=0.1,
+        norm_momentum=0.1,
         repetitions=1 if debug else 4,
         slice_shape=(512, 512, 16),
         sources_path=Path('/gpfswork/rech/otc/uiu95bi/sources'),
@@ -55,33 +55,111 @@ def main():
     )
     print(f"Run with options: {vars(args)}")
 
-    prepare_dataset(args)
+    # prepare_dataset(args)
     for i in range(args.repetitions):
         args.id = args.group_id + "-" + str(i)
-        model = Architecture(
+        mvi_model = Architecture(
             Sequential(
-                ConvBlock([4, 16, 16], actv=LeakyReLU, norm=BatchNorm3d),
-                MaxPool3d(kernel_size=(2, 2, 1)),  # 16 128 128 32
-                ConvBlock([16, 32, 32], actv=LeakyReLU, norm=BatchNorm3d),
-                MaxPool3d(kernel_size=(2, 2, 1)),  # 32 64 64 32
-                ConvBlock([32, 64, 64], actv=LeakyReLU, norm=BatchNorm3d),
-                MaxPool3d(kernel_size=(2, 2, 2)),  # 64 32 32 16
-                ConvBlock([64, 128, 128], actv=LeakyReLU, norm=BatchNorm3d),
-                MaxPool3d(kernel_size=(2, 2, 2)),  # 128 16 16 8
-                ConvBlock([128, 256, 256], actv=LeakyReLU, norm=BatchNorm3d),
-                MaxPool3d(kernel_size=(2, 2, 2)),  # 256 8 8 4 = 1024 64 = 65536
-                Flatten(),
-                Linear(2 ** 16, 2 ** 12),
-                LeakyReLU(),
-                Linear(2 ** 12, 2 ** 8),
-                LeakyReLU(),
-                Linear(2 ** 8, 2 ** 4),
-                LeakyReLU(),
-                Linear(2 ** 4, 2),
+                Separate(
+                    EncDecConnection("avg", "up_n", (2, 2, 1), cat=True)(
+                        ConvBlock([4, 16, 16], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum),
+                        EncDecConnection("max", "up_n", (2, 2, 1))(
+                            ConvBlock([16, 32, 32], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum),
+                            EncDecConnection("max", "up_n", (2, 2, 2))(
+                                ConvBlock([32, 64, 64], actv=LeakyReLU, norm=BatchNorm3d,
+                                            momentum=args.norm_momentum),
+                                EncDecConnection("max", "up_n", (2, 2, 2))(
+                                    ConvBlock([64, 64, 64], actv=LeakyReLU, norm=BatchNorm3d,
+                                                momentum=args.norm_momentum)
+                                ),
+                                ConvBlock([128, 64, 32], actv=LeakyReLU, norm=BatchNorm3d,
+                                            momentum=args.norm_momentum, drop=Dropout3d)
+                            ),
+                            ConvBlock([64, 32, 16], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum,
+                                        drop=Dropout3d)
+                        ),
+                        ConvBlock([32, 32, 16], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum,
+                                    drop=Dropout3d)
+                    ),
+                    EncDecConnection("avg", "up_n", (4, 4, 1), cat=False)(
+                        ConvBlock([4, 16, 16], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum),
+                        EncDecConnection("max", "up_n", (2, 2, 2))(
+                            ConvBlock([16, 32, 32], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum),
+                            EncDecConnection("max", "up_n", (2, 2, 2))(
+                                ConvBlock([32, 64, 64], actv=LeakyReLU, norm=BatchNorm3d,
+                                            momentum=args.norm_momentum),
+                                EncDecConnection("max", "up_n", (2, 2, 2))(
+                                    ConvBlock([64, 64, 64], actv=LeakyReLU, norm=BatchNorm3d,
+                                                momentum=args.norm_momentum)
+                                ),
+                                ConvBlock([128, 64, 32], actv=LeakyReLU, norm=BatchNorm3d,
+                                            momentum=args.norm_momentum, drop=Dropout3d)
+                            ),
+                            ConvBlock([64, 32, 16], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum,
+                                        drop=Dropout3d)
+                        ),
+                        ConvBlock([32, 32, 16], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum,
+                                    drop=Dropout3d)
+                    ),
+                ),
+                Cat(),
+                ConvBlock([4 + 16 + 16, 32, 16, 2], kernel_size=(1, 1, 1), actv=LeakyReLU),
             ),
             inputs=[("wscan", torch.float32)],
-            outputs=["predmvi"],
+            outputs=["localmvi"],
             cuda_rank=0,
+            storage=args.models_path / (args.id + ".pt"),
+        )
+        relevance = Architecture(
+            Sequential(
+                Separate(
+                    EncDecConnection("avg", "up_n", (2, 2, 1), cat=True)(
+                        ConvBlock([4, 16, 16], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum),
+                        EncDecConnection("max", "up_n", (2, 2, 1))(
+                            ConvBlock([16, 32, 32], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum),
+                            EncDecConnection("max", "up_n", (2, 2, 2))(
+                                ConvBlock([32, 64, 64], actv=LeakyReLU, norm=BatchNorm3d,
+                                            momentum=args.norm_momentum),
+                                EncDecConnection("max", "up_n", (2, 2, 2))(
+                                    ConvBlock([64, 64, 64], actv=LeakyReLU, norm=BatchNorm3d,
+                                                momentum=args.norm_momentum)
+                                ),
+                                ConvBlock([128, 64, 32], actv=LeakyReLU, norm=BatchNorm3d,
+                                            momentum=args.norm_momentum, drop=Dropout3d)
+                            ),
+                            ConvBlock([64, 32, 16], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum,
+                                        drop=Dropout3d)
+                        ),
+                        ConvBlock([32, 32, 16], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum,
+                                    drop=Dropout3d)
+                    ),
+                    EncDecConnection("avg", "up_n", (4, 4, 1), cat=False)(
+                        ConvBlock([4, 16, 16], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum),
+                        EncDecConnection("max", "up_n", (2, 2, 2))(
+                            ConvBlock([16, 32, 32], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum),
+                            EncDecConnection("max", "up_n", (2, 2, 2))(
+                                ConvBlock([32, 64, 64], actv=LeakyReLU, norm=BatchNorm3d,
+                                            momentum=args.norm_momentum),
+                                EncDecConnection("max", "up_n", (2, 2, 2))(
+                                    ConvBlock([64, 64, 64], actv=LeakyReLU, norm=BatchNorm3d,
+                                                momentum=args.norm_momentum)
+                                ),
+                                ConvBlock([128, 64, 32], actv=LeakyReLU, norm=BatchNorm3d,
+                                            momentum=args.norm_momentum, drop=Dropout3d)
+                            ),
+                            ConvBlock([64, 32, 16], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum,
+                                        drop=Dropout3d)
+                        ),
+                        ConvBlock([32, 32, 16], actv=LeakyReLU, norm=BatchNorm3d, momentum=args.norm_momentum,
+                                    drop=Dropout3d)
+                    ),
+                ),
+                Cat(),
+                ConvBlock([4 + 16 + 16, 32, 16, 1], kernel_size=(1, 1, 1), actv=LeakyReLU),
+            ),
+            inputs=[("wscan", torch.float32)],
+            outputs=["relevance"],
+            cuda_rank=1,
             storage=args.models_path / (args.id + ".pt"),
         )
 
@@ -99,19 +177,31 @@ def main():
         #     inputs=["mvi", ("target", torch.int64)],
         #     outputs=["cross"],
         # )
+        class CustomLoss(CrossEntropyLoss):
+            def forward(self, input, relevance, target):
+                input = torch.permute(input, (0, 2, 3, 4, 1))
+                relevance = torch.permute(relevance, (0, 2, 3, 4, 1))
+                input = torch.reshape(input, (-1, 2))
+                relevance = torch.reshape(relevance, (-1, 1))
+                target = target.broadcast_to(input.shape[0])
+                return (
+                    super(CustomLoss, self).forward(input, target)
+                    + super(CustomLoss, self).forward(torch.exp(relevance)*input, target)
+                )
 
         loss = Architecture(
-            CrossEntropyLoss(),
-            inputs=["predmvi", ("mvi", torch.int64)],
+            CustomLoss(),
+            inputs=["localmvi", "relevance", ("mvi", torch.int64)],
             outputs=["loss"],
             cuda_rank=0,
         )
 
-        model.to_device()
+        mvi_model.to_device()
+        relevance.to_device()
         loss.to_device()
 
-        print("Using model:", repr(model))
-        args.arch = model.stream.summary
+        print("Using model:", repr(mvi_model))
+        # args.arch = model.stream.summary
 
         # train_cases, valid_cases = px.split_trainables(args.sources_path, shuffle=True, offset=i)
 
@@ -141,7 +231,7 @@ def main():
         run = report.init(config=vars(args), id=args.id, group=args.group_id, mute=debug)
         args.start_time = time.time()
         try:
-            train(model, loss=loss, metrics=loss, tds=train_dataset, vds=valid_dataset, args=args)
+            train(mvi_model, relevance, loss=loss, metrics=loss, tds=train_dataset, vds=valid_dataset, args=args)
             # if not debug:
             #     global_dataset = dataset.GeneratorDataset(
             #         ({"case_path": args.sources_path / case_path} for case_path in sorted(px.iter_trainable(args.sources_path))),
@@ -171,12 +261,11 @@ def prepare_dataset(args):
     premodel.stream.eval()
     for case_path in px.iter_registered(args.sources_path):
         bundle = nibabelio.load(args.sources_path / case_path, segm=False, clip=args.clip)
-        print("Name:", bundle["name"])
         row = hercoles.loc[hercoles['ID_Paziente'] == bundle["name"]]
-        print(f"Database row (len {len(row)}):", row)
-        print("MVI:", hercoles.loc[hercoles['ID_Paziente'] == bundle["name"]]["MVI"])
         if len(row)!=1:
             continue
+        # print("Name:", bundle["name"], "Row len:", len(row))
+        # print("MVI:", hercoles.loc[hercoles['ID_Paziente'] == bundle["name"]]["MVI"].to_numpy())
         bundle = apply(
             premodel,
             bundle,
@@ -190,13 +279,13 @@ def prepare_dataset(args):
             dict(
                 name=bundle["name"],
                 wscan=bundle["scan"][:, x:x + xl, y:y + yl, z:z + zl],
-                mvi=torch.tensor(hercoles.loc[hercoles['ID_Paziente'] == bundle["name"]]["MVI"].to_numpy(), dtype=torch.int64)
+                mvi=torch.tensor(hercoles.loc[hercoles['ID_Paziente'] == bundle["name"]]["MVI"].to_numpy(), dtype=torch.int64).squeeze(-1)
             ),
             f"{args.preds_path / (bundle['name'] + '.pt')}"
         )
 
 
-def train_epoch(model: Architecture, *, loss: Architecture, ds: Dataset, epoch, optimizer, args):
+def train_epoch(*models: Architecture, loss: Architecture, ds: Dataset, epoch, optimizer, args):
     """Assuming model is single stream."""
     round_loss = 0
     optimizer.zero_grad()
@@ -204,7 +293,8 @@ def train_epoch(model: Architecture, *, loss: Architecture, ds: Dataset, epoch, 
     dl = DataLoader(ds, batch_size=args.batch_size)
     for key, data in enumerate(dl):
         # key = int(data["keys"][0])
-        model.forward(data)
+        for model in models:
+            model.forward(data)
         loss.forward(data)
         data["loss"] /= args.grad_accumulation_steps
         data["loss"].backward()
@@ -223,22 +313,23 @@ def train_epoch(model: Architecture, *, loss: Architecture, ds: Dataset, epoch, 
 
 
 @torch.no_grad()
-def validation_round(model: Architecture, *, metrics: Architecture, ds: Dataset, epoch=0, args):
+def validation_round(*models: Architecture, metrics: Architecture, ds: Dataset, epoch=0, args):
     """Assuming model is single stream."""
     round_loss = 0
     dl = DataLoader(ds, batch_size=1)
     for data in dl:
         name = data["name"][0]
-        model.forward(data)
-        print(data)
+        for model in models:
+            model.forward(data)
+        # print(data)
         metrics.forward(data)
         round_loss += data["loss"].item()
         print(
-            f"{name:>12}:"
-            f"{data['predmvi']} <> {data['mvi']}"
+            f"{name:>12}: "
+            # f"{data['predmvi']} <> {data['mvi']}"
             f"{data['loss'].item():.3e} loss"
         )
-    mean_loss = round_loss * args.grad_accumulation_steps / len(ds)
+    mean_loss = round_loss / len(ds)
     print(
         f"Validation epoch {epoch + 1}/{args.epochs}. "
         f"Loss: {mean_loss:.2e}. "
@@ -246,9 +337,9 @@ def validation_round(model: Architecture, *, metrics: Architecture, ds: Dataset,
     report.append({"valid_loss": mean_loss})
 
 
-def train(model: Architecture, *, loss: Architecture, metrics: Architecture, tds: Dataset, vds: Dataset, args):
+def train(*models: Architecture, loss: Architecture, metrics: Architecture, tds: Dataset, vds: Dataset, args):
     optimizer = AdaBelief(
-        model.stream.parameters(),
+        [p for model in models for p in model.stream.parameters()],
         lr=args.lr,
         eps=1e-8,
         betas=(0.9, 0.999),
@@ -256,15 +347,18 @@ def train(model: Architecture, *, loss: Architecture, metrics: Architecture, tds
         rectify=False,
         print_change_log=False,
     )
-    model.stream.eval()
-    validation_round(model, metrics=metrics, ds=vds, epoch=0, args=args)
+    for model in models:
+        model.stream.eval()
+    validation_round(*models, metrics=metrics, ds=vds, epoch=0, args=args)
     for epoch in range(args.epochs):
-        model.stream.train()
-        train_epoch(model, loss=loss, ds=tds, epoch=epoch, optimizer=optimizer, args=args)
+        for model in models:
+            model.stream.train()
+        train_epoch(*models, loss=loss, ds=tds, epoch=epoch, optimizer=optimizer, args=args)
         if (epoch + 1) % 20 == 0:
-            model.stream.eval()
-            validation_round(model, metrics=metrics, ds=vds, epoch=epoch + 1, args=args)
-            model.save()
+            for model in models:
+                model.stream.eval()
+            validation_round(*models, metrics=metrics, ds=vds, epoch=epoch + 1, args=args)
+            # model.save()
             # args.norm_momentum = 0.4 * 0.01 + 0.6 * args.norm_momentum
             # model.stream.apply(set_norm(args.norm_momentum))
             # tds.buffer_size += args.buffer_increment

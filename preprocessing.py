@@ -272,6 +272,7 @@ def regs_dict_from(path: Path) -> tuple[dict[str, np.ndarray], np.ndarray, int, 
     regs = dict()
     regs["v"] = orig_v[..., bottom:top]
     for phase in ["b", "a", "t"]:
+        print(f"Registering phase {phase}...")
         data, _ = pyelastix.register(
             np.ascontiguousarray(moveds[phase][0][..., bottom:top]),
             np.ascontiguousarray(regs["v"]),

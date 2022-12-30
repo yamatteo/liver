@@ -35,7 +35,7 @@ def main():
         if px.is_original(case_path) or px.is_registered(case_path):
             pass
         else:
-            (args.target / folder_name).mkdir()
+            (args.target / folder_name).mkdir(parents=True, exist_ok=True)
             # print("Want to process", sources / folder_name, ">>", targets / case_name)
             px.process_dicomdir(args.source / folder_name, args.target / folder_name)
 

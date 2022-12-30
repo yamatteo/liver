@@ -35,9 +35,12 @@ def main():
         if px.is_original(case_path) or px.is_registered(case_path):
             pass
         else:
-            (args.target / folder_name).mkdir(parents=True, exist_ok=True)
-            # print("Want to process", sources / folder_name, ">>", targets / case_name)
-            pp.process_dicomdir(args.source / folder_name, args.target / folder_name)
+            try:
+                (args.target / folder_name).mkdir(parents=True, exist_ok=True)
+                # print("Want to process", sources / folder_name, ">>", targets / case_name)
+                pp.process_dicomdir(args.source / folder_name, args.target / folder_name)
+            except ValueError as err:
+                print(folder_name, err)
 
     for case_name in px.iter_original(args.target):
         case_path = args.target / case_name

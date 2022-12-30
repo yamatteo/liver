@@ -37,7 +37,7 @@ def main():
         else:
             (args.target / folder_name).mkdir(parents=True, exist_ok=True)
             # print("Want to process", sources / folder_name, ">>", targets / case_name)
-            px.process_dicomdir(args.source / folder_name, args.target / folder_name)
+            pp.process_dicomdir(args.source / folder_name, args.target / folder_name)
 
     for case_name in px.iter_original(args.target):
         case_path = args.target / case_name

@@ -11,6 +11,20 @@ muted = False
 
 def init(*, project: str = "liver-tumor-detection", entity: str = "yamatteo", id: str = None, config: dict = None,
          group: str = None, mute: bool = False):
+    """
+    Initialize WandB for logging experiments.
+
+    Parameters:
+        project (str, optional): The project name. Default is "liver-tumor-detection".
+        entity (str, optional): The WandB entity. Default is "yamatteo".
+        id (str, optional): The experiment ID. Default is None, so different for every run.
+        config (dict, optional): Configuration settings for the experiment. Default is None.
+        group (str, optional): The group name. Default is None. Use it to compare different runs.
+        mute (bool, optional): Whether to mute WandB logging. Default is False.
+
+    Returns:
+        If muted, returns a mock object with a finish method; otherwise, returns the WandB run object.
+    """
     global muted
     if mute:
         muted = True
@@ -32,9 +46,12 @@ def append(items: dict, commit=True):
 
 
 def sample(scan: np.ndarray, pred: np.ndarray, segm: np.ndarray):
+    """
+    Create and return a WandB Image for visualization. scan.shape is [N, C, X, Y, Z], segm and pred are [N, X, Y, Z]
+    """
     if muted:
         return
-    # scan.shape is [N, C, X, Y, Z], segm and pred are [N, X, Y, Z]
+    # 
     n = random.randint(0, scan.shape[0] - 1)
     z = random.randint(0, scan.shape[4] - 1)
 
@@ -48,7 +65,18 @@ def sample(scan: np.ndarray, pred: np.ndarray, segm: np.ndarray):
 
 
 def samples(scan: np.ndarray, pred: np.ndarray, segm: np.ndarray, *, num=4, only_liver=False):
-    # scan.shape is [N, C, X, Y, Z], segm and pred are [N, X, Y, Z]
+    """Create and return a list of WandB Image objects for visualization.
+
+    Parameters:
+        scan (np.ndarray): The input scan data shape [N, C, X, Y, Z].
+        pred (np.ndarray): The predicted data shape [N, X, Y, Z].
+        segm (np.ndarray): The segmentation data shape [N, X, Y, Z].
+        num (int, optional): The number of samples. Default is 4.
+        only_liver (bool, optional): Whether to focus only on liver samples. Default is False.
+
+    Returns:
+        List[List[Optional[wandb.Image]]]: A list of lists containing WandB Image objects if not muted; otherwise, [[]].
+    """
     if muted:
         return [[]]
     step = scan.shape[-1] // (num+2)

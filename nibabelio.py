@@ -8,99 +8,52 @@ import numpy as np
 from rich import print
 
 
-# class Bundle:
-#     def __init__(self, scan, segm=None, name=None):
-#         if isinstance(scan, torch.Tensor):
-#             scan = scan.clone().detach().to(dtype=torch.float32)
-#         else:
-#             scan = torch.tensor(scan, dtype=torch.float32)
-#         assert (scan.ndim == 4 or scan.ndim == 5) and scan.size(-3) == scan.size(-2) == 512 and scan.size(-4) == 4, \
-#             f"Scan is expected to be of shape [N, 4, 512, 512, Z] or [4, 512, 512, Z], got {list(scan.shape)}."
-#         if isinstance(segm, torch.Tensor):
-#             segm = segm.clone().detach().to(dtype=torch.int64)
-#         elif segm is not None:
-#             segm = torch.tensor(segm, dtype=torch.int64)
-#         if segm is not None:
-#             assert scan.ndim == segm.ndim + 1, \
-#                 f"Segm is expected to be categorical, got scan {list(scan.shape)} and segm {list(segm.shape)}."
-#             assert segm.shape[-3:] == scan.shape[-3:], \
-#                 f"Tensors must have the same spacial dimensions, got scan {list(scan.shape)} and segm {list(segm.shape)}."
-#             assert scan.ndim == 4 or len(scan) == len(segm), \
-#                 f"Batches should have same length, got scan {list(scan.shape)} and segm {list(segm.shape)}."
-#         self.scan: torch.Tensor = scan
-#         self.segm: torch.Tensor = segm
-#         self.name = name
-#
-#     @property
-#     def is_batch(self) -> bool:
-#         return self.scan.ndim == 5
-#
-#     @property
-#     def onehot_segm(self) -> torch.Tensor:
-#         oh_segm = functional.one_hot(self.segm, num_classes=3).to(dtype=torch.float32)
-#         if self.is_batch:
-#             return torch.permute(oh_segm, (0, 4, 1, 2, 3))
-#         else:
-#             return torch.permute(oh_segm, (3, 0, 1, 2))
-#
-#     @property
-#     def shape(self) -> torch.Size:
-#         return self.scan.shape
-#
-#     def deformed(self) -> Bundle:
-#         print("Applying random elastic deformation...")
-#         scan = self.scan.cpu().numpy()
-#         segm = self.onehot_segm.cpu().numpy()
-#         axis = (2, 3, 4) if self.is_batch else (1, 2, 3)
-#         scan, segm = elasticdeform.deform_random_grid(
-#             [scan, segm],
-#             sigma=np.broadcast_to(np.array([4, 4, 1]).reshape([3, 1, 1, 1]), [3, 5, 5, 5]),
-#             points=[5, 5, 5],
-#             axis=[axis, axis],
-#         )
-#         segm = np.argmax(segm, axis=1) if self.is_batch else np.argmax(segm, axis=0)
-#         return Bundle(scan, segm)
-#
-#     def narrow(self, dim: int, start: int, length: int, pad: bool = True) -> Bundle:
-#         assert dim in [-3, -2, -1], "dim should be negative, indicating spatial dimension"
-#         available_length = min(length, self.scan.size(dim)-start)
-#         scan = torch.narrow(self.scan, dim=dim, start=start, length=available_length)
-#         if pad and available_length < length:
-#             pad_width = tuple(length - available_length if d == dim else 0 for d in (0, -1, 0, -2, 0, -3))
-#             pad = torch.nn.ReplicationPad3d(pad_width)
-#         else:
-#             pad = lambda x: x
-#         scan = pad(scan)
-#
-#         if self.segm is None:
-#             segm = None
-#         else:
-#             segm = torch.narrow(self.onehot_segm, dim, start, min(length, self.scan.size(dim)-start))
-#             segm = pad(segm)
-#             segm = torch.argmax(segm, dim=1) if self.is_batch else torch.argmax(segm, dim=0)
-#         return Bundle(scan, segm)
-#
-#     def slices(self, length: int = 1, step: int = None) -> Iterator[Bundle]:
-#         if step is None:
-#             step = max(1, length // 2)
-#         for start in range(0, self.shape[-1] - length // 2, step):
-#             yield self.narrow(-1, start, length)
-
-
 ### Nibabel Input/Output
 
 def load_ndarray(file_path: Path) -> np.ndarray:
+    """
+    Load a NIfTI file using nibabel and return its data as a NumPy array.
+
+    Parameters:
+        file_path (Path): The path to the NIfTI file.
+
+    Returns:
+        np.ndarray: The NIfTI image data as a NumPy array (int16).
+    """
     image = nibabel.load(file_path)
     return np.array(image.dataobj, dtype=np.int16)
 
 
 def load_registration_data(case_path: Path) -> tuple[np.ndarray, int, int, int]:
+    """
+    Load registration data from a pickle file associated with a case.
+
+    Parameters:
+        case_path (Path): The path to the case directory.
+
+    Returns:
+        tuple[np.ndarray, int, int, int]: A tuple containing affine matrix,
+            bottom, top, and height values from the registration data.
+    """
     with open(case_path / "registration_data.pickle", "rb") as f:
         d = pickle.load(f)
     return d["affine"], d["bottom"], d["top"], d["height"]
 
 
 def load(case_path: Path, scan: bool = True, segm: bool = False, clip: tuple[int, int] = None) -> dict:
+    """
+    Load data from a case directory, including registered scan and segmentation.
+
+    Parameters:
+        case_path (Path): The path to the case directory.
+        scan (bool, optional): Whether to load the registered scan data. Default is True.
+        segm (bool, optional): Whether to load the segmentation data. Default is False.
+        clip (tuple[int, int], optional): Tuple specifying the lower and upper clip values for the scan data.
+
+    Returns:
+        dict: A dictionary containing the loaded data, including 'scan', 'segm', and 'name'.
+            'scan' and 'segm' may be None if not requested.
+    """
     print(f"Loading {case_path}...")
     name = str(case_path.name)
     _, bottom, top, _ = load_registration_data(case_path)

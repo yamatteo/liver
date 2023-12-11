@@ -10,6 +10,23 @@ from .utils import wrap
 
 
 class Stream(nn.Module):
+    """
+    Base class for stream-style neural network modules.
+
+    Forward methods of classes that inherit from Stream should accept many
+    Tensors and return tuple of tensors, even with a single tensor.
+
+    Attributes:
+        relevant_args (tuple): Tuple of relevant (non-default) positional arguments.
+        relevant_kwargs (dict): Dictionary of relevant (non-default) keyword arguments.
+        repr_dict: Dictionary containing class name, relevant args, and relevant kwargs.
+
+    Methods:
+        forward(*args: Tensor) -> Tuple[Tensor, ...]: Forward pass through the module.
+        shaper: Method for computing in advance the shape of outputs. Redefined in subclasses.
+
+
+    """
     def __init__(self, *args, **kwargs):
         super(Stream, self).__init__(*args, **kwargs)
         params = inspect.signature(self.__init__).parameters
@@ -67,6 +84,17 @@ class BatchNorm3d(Stream, nn.BatchNorm3d):
 
 
 class Cat(Stream, nn.Module):
+    """
+    Concatenation layer along a specified dimension.
+
+    Args:
+        dim (int, optional): Dimension along which to concatenate. Default is 1 for channels.
+
+    Methods:
+        forward(*args: Tensor) -> Tuple[Tensor, ...]: Forward pass through the module.
+        shaper(*shapes: Tuple[int, ...]) -> Tuple[Tuple[int, ...]]: Compute output shape based on input shapes.
+
+    """
     def __init__(self, dim=1):
         super(Cat, self).__init__()
         self.dim = dim
@@ -130,6 +158,16 @@ class Dropout3d(Stream, nn.Dropout3d):
 
 
 class Expression(Stream, nn.Module):
+    """
+    Expression layer for evaluating an arbitrary string expression with the locals() of the forward pass.
+
+    Args:
+        expression (str): Python expression to be evaluated.
+
+    Methods:
+        forward(*args: Tensor) -> Tuple[Tensor, ...]: Forward pass through the module.
+
+    """
     def __init__(self, expression: str):
         super(Expression, self).__init__()
         self.expression = expression
@@ -138,6 +176,16 @@ class Expression(Stream, nn.Module):
         return wrap(eval(self.expression))  # Returns a tuple of Tensor
 
 class Flatten(Stream, nn.Module):
+    """
+    Flatten layer for flattening input tensors.
+
+    Args:
+        start_dim (int, optional): The starting dimension for flattening. Default is 1.
+
+    Methods:
+        forward(*args: Tensor) -> Tuple[Tensor, ...]: Forward pass through the module.
+
+    """
     def __init__(self, start_dim = 1):
         super(Flatten, self).__init__()
         self.start_dim = start_dim
@@ -152,6 +200,21 @@ class _FoldNorm3d(nn.BatchNorm3d):
 
 
 class FoldNorm3d(Stream, _FoldNorm3d):
+    """
+    3D Folded Batch Normalization layer. It sets its shape with the first forward pass if non is given.
+
+    It folds and unfolds the scan to do the norm, making a single scan looks like a batch of smaller size.
+
+    Args:
+        num_features (int): Number of input features.
+        folded_shape (tuple[int], optional): Shape to which the input is folded. Default is None.
+        momentum (float, optional): Momentum for running statistics. Default is 0.1.
+
+    Methods:
+        forward(input: Tensor) -> Tuple[Tensor]: Forward pass through the module.
+        set_shape(input_shape: Tuple[int]) -> None: Set the folded shape based on input shape.
+
+    """
     def __init__(self, num_features, *, folded_shape=None, momentum):
         super(FoldNorm3d, self).__init__(num_features, folded_shape=folded_shape, momentum=momentum)
         self.folded_shape = folded_shape
@@ -197,6 +260,7 @@ class InstanceNorm3d(Stream, nn.InstanceNorm3d):
 
 
 class Jaccard(Stream, nn.Module):
+    """Calculated the Jaccard's index of input against target."""
     def __init__(self, index=1):
         super(Jaccard, self).__init__()
         self.index = index
@@ -217,6 +281,7 @@ class Linear(Stream, nn.Linear):
         super(Linear, self).__init__(in_features=in_features, out_features=out_features)
 
 class MaskOf(Stream, nn.Module):
+    """Returns a mask (either 0. or 1.) of a specific index in the target."""
     def __init__(self, index):
         super(MaskOf, self).__init__()
         self.index = index
@@ -236,6 +301,7 @@ class MaxUnpool3d(Stream, nn.MaxUnpool3d):
 
 
 class Precision(Stream, nn.Module):
+    """Calculate the precision of input against target."""
     def __init__(self, index=1):
         super(Precision, self).__init__()
         self.index = index
@@ -248,6 +314,7 @@ class Precision(Stream, nn.Module):
 
 
 class Recall(Stream, nn.Module):
+    """Calculate the recall of input against target."""
     def __init__(self, index=1):
         super(Recall, self).__init__()
         self.index = index
@@ -277,6 +344,7 @@ class _IRNorm3d(nn.modules.instancenorm._InstanceNorm):
             raise ValueError('expected 4D or 5D input (got {}D input)'.format(input.dim()))
 
 class IRNorm3d(Stream, _IRNorm3d):
+    """Replicate pytorch's InstanceNorm."""
     def __init__(self, num_features: int, momentum=0.1, affine=True, track_running_stats=True):
         super(IRNorm3d, self).__init__(num_features, momentum=momentum, affine=affine, track_running_stats=track_running_stats)
 
@@ -292,11 +360,13 @@ class _LIRNorm3d(nn.modules.instancenorm._LazyNormBase, nn.modules.instancenorm.
             raise ValueError('expected 4D or 5D input (got {}D input)'.format(input.dim()))
 
 class LIRNorm3d(Stream, _LIRNorm3d):
+    """Replicate pytorch's LazyInstanceNorm."""
     def __init__(self, momentum=0.1, track_running_stats=True):
         super(LIRNorm3d, self).__init__(momentum=momentum, track_running_stats=track_running_stats)
 
 
 class SoftPrecision(Stream, nn.Module):
+    """Approximate the precision of input against target, differentiable."""
     def __init__(self, dim=1, index=1, num_classes=None):
         super(SoftPrecision, self).__init__()
         self.dim = dim
@@ -319,6 +389,7 @@ class SoftPrecision(Stream, nn.Module):
 
 
 class SoftRecall(Stream, nn.Module):
+    """Approximate the recal of input against target, differentiable."""
     def __init__(self, dim=1, index=1, num_classes=None):
         super(SoftRecall, self).__init__()
         self.dim = dim

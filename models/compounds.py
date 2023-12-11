@@ -1,3 +1,4 @@
+"""Blocks to easily define UNets."""
 from typing import Union
 
 from .streams import *

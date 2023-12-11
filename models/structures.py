@@ -11,6 +11,25 @@ from .utils import wrap
 
 
 class Structure(nn.ModuleList):
+    """Base-model for Structures.
+    
+    A 'Structure' is bundle of modules that manages tensors in streams.
+    It can store and rebuild it's own architecture.
+
+    Forward methods of classes that inherit from Structure should accept many
+    Tensors and return tuple of tensors, even with a single tensor.
+
+    Attributes:
+        relevant_args (tuple): Tuple of relevant (non-default) positional arguments.
+        relevant_kwargs (dict): Dictionary of relevant (non-default) keyword arguments.
+        repr_dict: Dictionary containing class name, relevant args, and relevant kwargs.
+
+    Methods:
+        forward(*args: Tensor) -> Tuple[Tensor, ...]: Forward pass through the module.
+        rebuild: Classmethod for building a structure from its own repr_dict.
+
+
+    """
     def __init__(self, *args: nn.Module, custom_repr=None, **kwargs):
         super(Structure, self).__init__(args)
         params = inspect.signature(self.__init__).parameters
@@ -69,6 +88,7 @@ class Structure(nn.ModuleList):
 
 
 class Parallel(Structure):
+    """Apply modules (A, B, C, ...) to arguments (a, b, c, ...) and return (A(a), B(b), C(c), ...)"""
     def __init__(self, *modules: Union[Stream, Structure], custom_repr=None):
         super(Parallel, self).__init__(*modules, custom_repr=custom_repr)
 
@@ -80,6 +100,7 @@ class Parallel(Structure):
 
 
 class Separate(Structure):
+    """Apply modules (A, B, C, ...) to arguments (a, b, c, ...) and return (A(a, b, c, ...), B(a, b, b, ...), C(a, b, c, ...), ...)"""
     def __init__(self, *modules: Union[Stream, Structure], custom_repr=None):
         super(Separate, self).__init__(*modules, custom_repr=custom_repr)
 
@@ -91,6 +112,7 @@ class Separate(Structure):
 
 
 class Sequential(Structure):
+    """Apply modules (A, B, C, ...) to arguments (a, b, c, ...) and return ...C(B(A(a, b, c, ...)))"""
     def __init__(self, *modules: Union[Stream, Structure], custom_repr=None):
         super(Sequential, self).__init__(*modules, custom_repr=custom_repr)
 

@@ -9,6 +9,7 @@ from .structures import Structure
 
 @dataclass
 class Input:
+    """Information about a particular input: a name, the dtype and the device to store it."""
     name: str
     device: torch.device = None
     dtype: torch.dtype = None
@@ -32,6 +33,7 @@ class Input:
 
 
 class Architecture:
+    """Like a pytorch module, but it can use streams, can rebuild itself and self-manage devices on multi-node clusters."""
     def __init__(self, stream: Union[Stream, Structure], inputs, outputs, cuda_rank=None, storage=None):
         super(Architecture, self).__init__()
         self.stream = stream
